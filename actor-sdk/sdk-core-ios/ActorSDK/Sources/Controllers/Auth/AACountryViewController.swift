@@ -20,7 +20,7 @@ public class AACountryViewController: AATableViewController {
         
         self.title = AALocalized("AuthCountryTitle")
         
-        let cancelButtonItem = UIBarButtonItem(title: AALocalized("NavigationCancel"), style: UIBarButtonItemStyle.Plain, target: self, action: "dismiss")
+        let cancelButtonItem = UIBarButtonItem(title: AALocalized("NavigationCancel"), style: UIBarButtonItemStyle.Plain, target: self, action: Selector("dismiss"))
         self.navigationItem.setLeftBarButtonItem(cancelButtonItem, animated: false)
         
         self.content = ACAllEvents_Auth.AUTH_PICK_COUNTRY()
@@ -59,7 +59,7 @@ public class AACountryViewController: AATableViewController {
     
     private func letters() -> NSArray {
         if (_letters == nil) {
-            _letters = (countries().allKeys as NSArray).sortedArrayUsingSelector(Selector("compare:"))
+            _letters = (countries().allKeys as NSArray).sortedArrayUsingSelector(#selector(YYTextPosition.compare(_:)))
         }
         return _letters;
     }

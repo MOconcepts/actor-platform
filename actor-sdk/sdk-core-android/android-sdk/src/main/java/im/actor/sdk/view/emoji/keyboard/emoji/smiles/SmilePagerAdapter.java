@@ -12,9 +12,7 @@ import android.widget.ImageButton;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import im.actor.core.viewmodel.StickerPackVM;
-import im.actor.runtime.mvvm.Value;
-import im.actor.runtime.mvvm.ValueChangedListener;
+import im.actor.runtime.mvvm.MVVMCollection;
 import im.actor.sdk.R;
 import im.actor.sdk.controllers.activity.BaseActivity;
 import im.actor.sdk.view.emoji.SmileProcessor;
@@ -35,33 +33,30 @@ public class SmilePagerAdapter extends PagerAdapter implements PagerSlidingTabSt
     private EmojiKeyboard emojiKeyboard;
     private int count;
     private PagerSlidingTabStrip tabs;
+    private StickersView stickersView;
 
     public SmilePagerAdapter(EmojiKeyboard emojiKeyboard) {
         this.emojiKeyboard = emojiKeyboard;
-        count = messenger().getOwnStickerPacks().get().size();
-        if (emojiKeyboard.getActivity() instanceof BaseActivity) {
-            ((BaseActivity) emojiKeyboard.getActivity()).bind(messenger().getOwnStickerPacks(), new ValueChangedListener<ArrayList<StickerPackVM>>() {
-                @Override
-                public void onChanged(ArrayList<StickerPackVM> val, Value<ArrayList<StickerPackVM>> valueModel) {
-                    count = messenger().getOwnStickerPacks().get().size();
-                    if (tabs != null) {
-                        tabs.notifyDataSetChanged();
-                    }
-                    notifyDataSetChanged();
-                }
-            }, false);
-        }
-
-        if (messenger().getOwnStickerPacks().get().size() == 0) {
-            messenger().loadStickers();
-        }
+//        count = messenger().getOwnStickerPacks().getValuesMap().values().size();
+//        if (emojiKeyboard.getActivity() instanceof BaseActivity) {
+//            messenger().getOwnStickerPacks().addCallback(new MVVMCollection.OnChangedListener() {
+//                @Override
+//                public void onChanged() {
+//                    count = messenger().getOwnStickerPacks().getValuesMap().values().size();
+//                    if (tabs != null) {
+//                        tabs.notifyDataSetChanged();
+//                    }
+//                    notifyDataSetChanged();
+//                }
+//            });
+//        }
 
     }
 
 
     @Override
     public int getCount() {
-        return count > 0 ? 6 : 5;
+        return 6;//count > 0 ? 6 : 5;
     }
 
     @Override
@@ -141,7 +136,10 @@ public class SmilePagerAdapter extends PagerAdapter implements PagerSlidingTabSt
             });
 
         } else {
-            itemView = new StickersView(container.getContext(), emojiKeyboard);
+            if (stickersView == null) {
+                stickersView = new StickersView(container.getContext(), emojiKeyboard);
+            }
+            itemView = stickersView;
         }
         container.addView(itemView, 0);
         return itemView;
@@ -193,7 +191,7 @@ public class SmilePagerAdapter extends PagerAdapter implements PagerSlidingTabSt
                 *//*tabView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
                 tabView.setAdjustViewBounds(true);
                 //tabView.setCropToPadding(false);
-                StickersPack pack = Stickers.getPacks()[position - 1];
+                StickerPack pack = Stickers.getPacks()[position - 1];
                 tabView.setImageURI(Uri.parse(Stickers.getFile(pack.getId(), pack.getLogoStickerId())));*//*
         //}*/
         return tabView;
@@ -201,5 +199,11 @@ public class SmilePagerAdapter extends PagerAdapter implements PagerSlidingTabSt
 
     public void setTabs(PagerSlidingTabStrip tabs) {
         this.tabs = tabs;
+    }
+
+    public void release() {
+        if (stickersView != null) {
+            stickersView.relesase();
+        }
     }
 }

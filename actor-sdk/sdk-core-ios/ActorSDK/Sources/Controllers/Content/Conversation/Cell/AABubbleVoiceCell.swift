@@ -98,7 +98,7 @@ public class AABubbleVoiceCell: AABubbleBaseFileCell,AAModernConversationAudioPl
         ////////////////////////////////////////////////////
         
         playPauseButton.setImage(UIImage.bundled("aa_playrecordbutton"), forState: UIControlState.Normal)
-        playPauseButton.addTarget(self, action: "mediaDidTap", forControlEvents: UIControlEvents.TouchUpInside)
+        playPauseButton.addTarget(self, action: #selector(AABubbleVoiceCell.mediaDidTap), forControlEvents: UIControlEvents.TouchUpInside)
         
         contentInsets = UIEdgeInsets(top: 1, left: 1, bottom: 1, right: 1)
         
@@ -110,7 +110,7 @@ public class AABubbleVoiceCell: AABubbleBaseFileCell,AAModernConversationAudioPl
     
     // MARK: - Binding
     
-    public override func bind(message: ACMessage, reuse: Bool, cellLayout: AACellLayout, setting: AACellSetting) {
+    public override func bind(message: ACMessage, receiveDate: jlong, readDate: jlong, reuse: Bool, cellLayout: AACellLayout, setting: AACellSetting) {
         self.bindedLayout = cellLayout as! VoiceMessageCellLayout
         
         let document = message.content as! ACVoiceContent
@@ -186,24 +186,19 @@ public class AABubbleVoiceCell: AABubbleBaseFileCell,AAModernConversationAudioPl
         // Update status
         if (isOut) {
             statusView.hidden = false
-            switch(message.messageState.ordinal()) {
-            case ACMessageState.PENDING().ordinal():
-                self.statusView.image = appStyle.chatIconClock
-                self.statusView.tintColor = appStyle.chatStatusSending
-                break
-            case ACMessageState.SENT().ordinal():
-                self.statusView.image = appStyle.chatIconCheck1
-                self.statusView.tintColor = appStyle.chatStatusSent
-                break
-            case ACMessageState.RECEIVED().ordinal():
-                self.statusView.image = appStyle.chatIconCheck2
-                self.statusView.tintColor = appStyle.chatStatusReceived
-                break
-            case ACMessageState.READ().ordinal():
-                self.statusView.image = appStyle.chatIconCheck2
-                self.statusView.tintColor = appStyle.chatStatusRead
-                break
-            case ACMessageState.ERROR().ordinal():
+            switch(message.messageState.toNSEnum()) {
+            case .SENT:
+                if message.sortDate <= readDate {
+                    self.statusView.image = appStyle.chatIconCheck2
+                    self.statusView.tintColor = appStyle.chatStatusRead
+                } else if message.sortDate <= receiveDate {
+                    self.statusView.image = appStyle.chatIconCheck2
+                    self.statusView.tintColor = appStyle.chatStatusReceived
+                } else {
+                    self.statusView.image = appStyle.chatIconCheck1
+                    self.statusView.tintColor = appStyle.chatStatusSent
+                }
+            case .ERROR:
                 self.statusView.image = appStyle.chatIconError
                 self.statusView.tintColor = appStyle.chatStatusError
                 break
@@ -426,7 +421,7 @@ public class VoiceMessageCellLayout: AACellLayout {
     /**
      Creting layout for media bubble
      */
-    public init(fileName: String, fileExt: String, fileSize: Int,id: Int64, date: Int64, autoDownload: Bool,duration:jint) {
+    public init(fileName: String, fileExt: String, fileSize: Int,id: Int64, date: Int64, autoDownload: Bool,duration:jint, layouter: AABubbleLayouter) {
         
         // Saving content size
         self.contentSize = CGSizeMake(200, 55)
@@ -442,7 +437,7 @@ public class VoiceMessageCellLayout: AACellLayout {
         self.fileSize = Actor.getFormatter().formatFileSize(jint(fileSize))
         
         // Creating layout
-        super.init(height: self.screenSize.height + 2, date: date, key: "voice")
+        super.init(height: self.screenSize.height + 2, date: date, key: "voice", layouter: layouter)
         
         self.voiceDuration = getTimeString(Int(duration))
     }
@@ -472,19 +467,17 @@ public class VoiceMessageCellLayout: AACellLayout {
      Creating layout for voice content
      */
     
-    public convenience init(id: Int64, voiceContent: ACVoiceContent, date: Int64) {
-        
-        
-        self.init(fileName: voiceContent.getName(), fileExt: voiceContent.getExt(), fileSize: Int(voiceContent.getSource().getSize()),id: id, date: date, autoDownload: true,duration:jint(voiceContent.getDuration()/1000))
+    public convenience init(id: Int64, voiceContent: ACVoiceContent, date: Int64, layouter: AABubbleLayouter) {
+        self.init(fileName: voiceContent.getName(), fileExt: voiceContent.getExt(), fileSize: Int(voiceContent.getSource().getSize()),id: id, date: date, autoDownload: true,duration:jint(voiceContent.getDuration()/1000), layouter: layouter)
     }
     
     
     /**
      Creating layout for message
      */
-    public convenience init(message: ACMessage) {
+    public convenience init(message: ACMessage, layouter: AABubbleLayouter) {
         if let content = message.content as? ACVoiceContent {
-            self.init(id: Int64(message.rid), voiceContent: content, date: Int64(message.date))
+            self.init(id: Int64(message.rid), voiceContent: content, date: Int64(message.date), layouter: layouter)
         } else {
             fatalError("Unsupported content for media cell")
         }
@@ -505,7 +498,7 @@ public class AABubbleVoiceCellLayouter: AABubbleLayouter {
     }
     
     public func buildLayout(peer: ACPeer, message: ACMessage) -> AACellLayout {
-        return VoiceMessageCellLayout(message: message)
+        return VoiceMessageCellLayout(message: message, layouter: self)
     }
     
     public func cellClass() -> AnyClass {

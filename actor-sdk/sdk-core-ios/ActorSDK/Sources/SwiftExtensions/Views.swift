@@ -11,7 +11,7 @@ private var targetReference = "target"
 public extension UITapGestureRecognizer {
     public convenience init(closure: ()->()){
         let target = ClosureTarget(closure: closure)
-        self.init(target: target, action: "invoke")
+        self.init(target: target, action: #selector(ClosureTarget.invoke))
         setAssociatedObject(self, value: target, associativeKey: &targetReference)
     }
 }
@@ -59,6 +59,18 @@ public extension UIView {
 //        UIView.animateWithDuration(0.2, animations: { () -> Void in
 //            self.alpha = 1
 //        })
+    }
+    
+    public func showViewAnimated() {
+        UIView.animateWithDuration(0.2, animations: { () -> Void in
+            self.alpha = 1
+        })
+    }
+    
+    public func hideViewAnimated() {
+        UIView.animateWithDuration(0.2, animations: { () -> Void in
+            self.alpha = 0
+        })
     }
     
 //    public var height: CGFloat { get { return bounds.height } }
@@ -173,37 +185,37 @@ public extension UITableView {
 }
 
 public extension UICollectionView {
-    private func cellTypeForClass(cellClass: AnyClass) -> String {
-        let cellReuseId = "\(cellClass)"
-        var registered: ([String])! = getAssociatedObject(self, associativeKey: &registeredCells)
-        var found = false
-        if registered != nil {
-            if registered.contains(cellReuseId) {
-                found = true
-            } else {
-                registered.append(cellReuseId)
-                setAssociatedObject(self, value: registered, associativeKey: &registeredCells)
-            }
-        } else {
-            setAssociatedObject(self, value: [cellReuseId], associativeKey: &registeredCells)
-        }
-        
-        if !found {
-            registerClass(cellClass, forCellWithReuseIdentifier: cellReuseId)
-        }
-        
-        return cellReuseId
-    }
-    
-    public func dequeueCell(cellClass: AnyClass, indexPath: NSIndexPath) -> UICollectionViewCell {
-        let reuseId = cellTypeForClass(cellClass)
-        return self.dequeueReusableCellWithReuseIdentifier(reuseId, forIndexPath: indexPath)
-    }
-    
-    public func dequeueCell<T where T: UICollectionViewCell>(indexPath: NSIndexPath) -> T {
-        let reuseId = cellTypeForClass(T.self)
-        return self.dequeueReusableCellWithReuseIdentifier(reuseId, forIndexPath: indexPath) as! T
-    }
+//    private func cellTypeForClass(cellClass: AnyClass) -> String {
+//        let cellReuseId = "\(cellClass)"
+//        var registered: ([String])! = getAssociatedObject(self, associativeKey: &registeredCells)
+//        var found = false
+//        if registered != nil {
+//            if registered.contains(cellReuseId) {
+//                found = true
+//            } else {
+//                registered.append(cellReuseId)
+//                setAssociatedObject(self, value: registered, associativeKey: &registeredCells)
+//            }
+//        } else {
+//            setAssociatedObject(self, value: [cellReuseId], associativeKey: &registeredCells)
+//        }
+//        
+//        if !found {
+//            registerClass(cellClass, forCellWithReuseIdentifier: cellReuseId)
+//        }
+//        
+//        return cellReuseId
+//    }
+//    
+//    public func dequeueCell(cellClass: AnyClass, indexPath: NSIndexPath) -> UICollectionViewCell {
+//        let reuseId = cellTypeForClass(cellClass)
+//        return self.dequeueReusableCellWithReuseIdentifier(reuseId, forIndexPath: indexPath)
+//    }
+//    
+//    public func dequeueCell<T where T: UICollectionViewCell>(indexPath: NSIndexPath) -> T {
+//        let reuseId = cellTypeForClass(T.self)
+//        return self.dequeueReusableCellWithReuseIdentifier(reuseId, forIndexPath: indexPath) as! T
+//    }
 }
 
 // Status bar and navigation bar heights

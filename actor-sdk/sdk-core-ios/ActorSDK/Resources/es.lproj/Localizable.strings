@@ -421,13 +421,13 @@
  * Welcome
  */
 
-"WelcomeTitle" = "Welcome to {app_name}!";
+"WelcomeTitle" = "Bienvenidos a {app_name}!";
 
 "WelcomeTagline" = "Mensajería gratis, segura y veloz.";
 
-"WelcomeSignUp" = "Sign Up";
+"WelcomeSignUp" = "Regístrate";
 
-"WelcomeLogIn" = "Log In";
+"WelcomeLogIn" = "Iniciar sesión";
 
 /*
  * Auth
@@ -467,6 +467,10 @@
 
 "AuthDisclaimer" = "Al registrarte, estás de acuerdo con los Términos de uso y Política de privacidad.";
 
+"AuthDisclaimerTosOnly" = "Al registrarte, estás de acuerdo con los Términos de uso.";
+
+"AuthDisclaimerPrivacyOnly" = "Al registrarte, estás de acuerdo con los Política de privacidad.";
+
 "AuthDisclaimerToS" = "Términos de uso";
 
 "AuthDisclaimerPrivacy" = "Política de privacidad";
@@ -475,7 +479,9 @@
 
 "AuthOTPPhoneTitle" = "Confirma tu número de móvil";
 
-"AuthOTPHint" = "We’ve sent you an confirmation code.\nPlease enter it below.";
+"AuthOTPPhoneHint" = "Te hemos enviado un código de confirmación.\nPor favor, introduzca a continuación.";
+
+"AuthOTPEmailHint" = "Te hemos enviado un código de confirmación.\nPor favor, introduzca a continuación.";
 
 "AuthOTPPlaceholder" = "Código confirmación";
 
@@ -568,6 +574,8 @@
 "ActionAddPhoto1" = "añadir";
 
 "ActionAddPhoto2" = "foto";
+
+"ActionOpenCode" = "View Code";
 
 /*
  * Network

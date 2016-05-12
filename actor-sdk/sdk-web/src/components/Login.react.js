@@ -19,11 +19,15 @@ class Login extends Component {
   constructor(props) {
     super(props);
 
+    LoginActionCreators.start();
+
     const SharedActor = SharedContainer.get();
     this.appName = SharedActor.appName ? SharedActor.appName : appName;
   }
 
-  static getStores = () => [LoginStore];
+  static getStores() {
+    return [LoginStore];
+  }
 
   static calculateState() {
     return {
@@ -36,7 +40,7 @@ class Login extends Component {
       isCodeSended: LoginStore.isCodeSended(),
       isSignupStarted: LoginStore.isSignupStarted()
     }
-  };
+  }
 
   static contextTypes = {
     intl: PropTypes.object
@@ -133,14 +137,14 @@ class Login extends Component {
 
           <article>
             <h1 className="login-new__heading">
-              <FormattedHTMLMessage id="login.welcome.header" values={{appName: this.appName}}/>
+              <FormattedHTMLMessage id="login.welcome.header" values={{ appName: this.appName }}/>
             </h1>
 
-            <FormattedHTMLMessage id="login.welcome.text" values={{appName: this.appName}}/>
+            <FormattedHTMLMessage id="login.welcome.text" values={{ appName: this.appName }}/>
           </article>
 
           <footer>
-            <div className="pull-left"><FormattedMessage id="login.welcome.copyright" values={{appName: this.appName}}/></div>
+            <div className="pull-left"><FormattedMessage id="login.welcome.copyright" values={{ appName: this.appName }}/></div>
             <div className="pull-right">
               <a href="//actorapp.ghost.io/desktop-apps">Desktop</a>&nbsp;&nbsp;•&nbsp;&nbsp;
               <a href="//actor.im/ios">iPhone</a>&nbsp;&nbsp;•&nbsp;&nbsp;
@@ -216,4 +220,4 @@ class Login extends Component {
   }
 }
 
-export default Container.create(Login, {pure: false, withProps: true});
+export default Container.create(Login, { pure: false, withProps: true });

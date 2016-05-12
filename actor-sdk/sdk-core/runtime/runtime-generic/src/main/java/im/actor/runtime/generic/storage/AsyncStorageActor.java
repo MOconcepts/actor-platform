@@ -4,6 +4,8 @@
 
 package im.actor.runtime.generic.storage;
 
+import com.google.j2objc.annotations.AutoreleasePool;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +19,14 @@ import im.actor.runtime.storage.ListEngineItem;
 import im.actor.runtime.storage.ListEngineRecord;
 import im.actor.runtime.storage.ListStorageDisplayEx;
 
+// Disabling Bounds checks for speeding up calculations
+
+/*-[
+#define J2OBJC_DISABLE_ARRAY_BOUND_CHECKS 1
+]-*/
+
 class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
+
     private final ListStorageDisplayEx storage;
     private final BserCreator<T> creator;
 
@@ -26,13 +35,14 @@ class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
         this.creator = creator;
     }
 
+    @AutoreleasePool
     public void addOrUpdate(List<T> items) {
         if (items.size() == 1) {
             T item = items.get(0);
             storage.updateOrAdd(new ListEngineRecord(item.getEngineId(), item.getEngineSort(),
                     item.getEngineSearch(), item.toByteArray()));
         } else if (items.size() > 0) {
-            List<ListEngineRecord> updated = new ArrayList<ListEngineRecord>();
+            List<ListEngineRecord> updated = new ArrayList<>();
             for (T i : items) {
                 updated.add(new ListEngineRecord(i.getEngineId(), i.getEngineSort(),
                         i.getEngineSearch(), i.toByteArray()));
@@ -41,8 +51,9 @@ class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
         }
     }
 
+    @AutoreleasePool
     public void replace(List<T> items) {
-        List<ListEngineRecord> updated = new ArrayList<ListEngineRecord>();
+        List<ListEngineRecord> updated = new ArrayList<>();
         for (T i : items) {
             updated.add(new ListEngineRecord(i.getEngineId(), i.getEngineSort(),
                     i.getEngineSearch(), i.toByteArray()));
@@ -51,6 +62,7 @@ class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
         storage.updateOrAdd(updated);
     }
 
+    @AutoreleasePool
     public void remove(long[] keys) {
         if (keys.length == 1) {
             storage.delete(keys[0]);
@@ -59,10 +71,12 @@ class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
         }
     }
 
+    @AutoreleasePool
     public void clear() {
         storage.clear();
     }
 
+    @AutoreleasePool
     public void loadItem(long key, LoadItemCallback<T> callback) {
         ListEngineRecord record = storage.loadItem(key);
         if (record != null) {
@@ -78,6 +92,7 @@ class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
         }
     }
 
+    @AutoreleasePool
     public void loadHead(LoadItemCallback<T> callback) {
         List<ListEngineRecord> records = storage.loadForward(null, 1);
 
@@ -95,10 +110,12 @@ class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
         }
     }
 
+    @AutoreleasePool
     public void loadCount(LoadCountCallback callback) {
         callback.onLoaded(storage.getCount());
     }
 
+    @AutoreleasePool
     public void loadForward(String query, Long topSortKey, int limit, ListEngineDisplayLoadCallback<T> callback) {
         ArrayList<T> res;
         if (query == null) {
@@ -110,6 +127,7 @@ class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
         callCallback(callback, res);
     }
 
+    @AutoreleasePool
     public void loadBackward(String query, Long topSortKey, int limit, ListEngineDisplayLoadCallback<T> callback) {
         ArrayList<T> res;
         if (query == null) {
@@ -121,12 +139,14 @@ class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
         callCallback(callback, res);
     }
 
+    @AutoreleasePool
     public void loadCenter(Long centerSortKey, int limit, ListEngineDisplayLoadCallback<T> callback) {
         ArrayList<T> res;
         res = convertList(storage.loadCenter(centerSortKey, limit));
         callCallback(callback, res);
     }
 
+    @AutoreleasePool
     private void callCallback(ListEngineDisplayLoadCallback<T> callback, List<T> res) {
         if (res.size() == 0) {
             callback.onLoaded(res, 0, 0);
@@ -162,6 +182,7 @@ class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
     }
 
     @Override
+    @AutoreleasePool
     public void onReceive(Object message) {
         if (message instanceof AddOrUpdate) {
             addOrUpdate(((AddOrUpdate) message).getItems());
@@ -183,11 +204,11 @@ class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
         } else if (message instanceof LoadBackward) {
             loadBackward(((LoadBackward) message).getQuery(), ((LoadBackward) message).getTopSortKey(),
                     ((LoadBackward) message).getLimit(), ((LoadBackward) message).getCallback());
-        }else if (message instanceof LoadCenter) {
+        } else if (message instanceof LoadCenter) {
             loadCenter(((LoadCenter) message).getCenterSortKey(),
                     ((LoadCenter) message).getLimit(), ((LoadCenter) message).getCallback());
         } else {
-            drop(message);
+            super.onReceive(message);
         }
     }
 
@@ -343,6 +364,7 @@ class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
             this.limit = limit;
             this.callback = callback;
         }
+
         public Long getCenterSortKey() {
             return centerSortKey;
         }
@@ -357,10 +379,10 @@ class AsyncStorageActor<T extends BserObject & ListEngineItem> extends Actor {
     }
 
     public interface LoadItemCallback<T extends BserObject & ListEngineItem> {
-        public void onLoaded(T item);
+        void onLoaded(T item);
     }
 
     public interface LoadCountCallback {
-        public void onLoaded(int count);
+        void onLoaded(int count);
     }
 }

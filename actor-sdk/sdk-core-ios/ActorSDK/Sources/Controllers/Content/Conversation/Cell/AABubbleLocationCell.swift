@@ -41,7 +41,7 @@ public class AABubbleLocationCell: AABubbleCell {
         
         contentInsets = UIEdgeInsets(top: 1, left: 1, bottom: 1, right: 1)
 
-        map.addGestureRecognizer(UITapGestureRecognizer(target: self, action: "mapDidTap"))
+        map.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(AABubbleLocationCell.mapDidTap)))
         map.userInteractionEnabled = true
     }
 
@@ -55,7 +55,7 @@ public class AABubbleLocationCell: AABubbleCell {
         UIApplication.sharedApplication().openURL(NSURL(string: url)!)
     }
     
-    public override func bind(message: ACMessage, reuse: Bool, cellLayout: AACellLayout, setting: AACellSetting) {
+    public override func bind(message: ACMessage, receiveDate: jlong, readDate: jlong, reuse: Bool, cellLayout: AACellLayout, setting: AACellSetting) {
         
         let layout = cellLayout as! AALocationCellLayout
         
@@ -86,31 +86,30 @@ public class AABubbleLocationCell: AABubbleCell {
         // Update status
         if (isOut) {
             statusView.hidden = false
-            switch(message.messageState.ordinal()) {
-            case ACMessageState.PENDING().ordinal():
-                self.statusView.image = appStyle.chatIconClock;
-                self.statusView.tintColor = appStyle.chatStatusMediaSending
-                break;
-            case ACMessageState.SENT().ordinal():
-                self.statusView.image = appStyle.chatIconCheck1;
-                self.statusView.tintColor = appStyle.chatStatusMediaSent
-                break;
-            case ACMessageState.RECEIVED().ordinal():
-                self.statusView.image = appStyle.chatIconCheck2;
-                self.statusView.tintColor = appStyle.chatStatusMediaReceived
-                break;
-            case ACMessageState.READ().ordinal():
-                self.statusView.image = appStyle.chatIconCheck2;
-                self.statusView.tintColor = appStyle.chatStatusMediaRead
-                break;
-            case ACMessageState.ERROR().ordinal():
-                self.statusView.image = appStyle.chatIconError;
+            switch(message.messageState.toNSEnum()) {
+            case .SENT:
+                if message.sortDate <= readDate {
+                    self.statusView.image = appStyle.chatIconCheck2
+                    self.statusView.tintColor = appStyle.chatStatusMediaRead
+                } else if message.sortDate <= receiveDate {
+                    self.statusView.image = appStyle.chatIconCheck2
+                    self.statusView.tintColor = appStyle.chatStatusMediaReceived
+                } else {
+                    self.statusView.image = appStyle.chatIconCheck1
+                    self.statusView.tintColor = appStyle.chatStatusMediaSent
+                }
+            case .ERROR:
+                self.statusView.image = appStyle.chatIconError
                 self.statusView.tintColor = appStyle.chatStatusMediaError
                 break
-            default:
-                self.statusView.image = appStyle.chatIconClock;
+            case .PENDING:
+                self.statusView.image = appStyle.chatIconClock
                 self.statusView.tintColor = appStyle.chatStatusMediaSending
-                break;
+                break
+            default:
+                self.statusView.image = appStyle.chatIconClock
+                self.statusView.tintColor = appStyle.chatStatusMediaSending
+                break
             }
         } else {
             statusView.hidden = true
@@ -154,10 +153,10 @@ public class AALocationCellLayout: AACellLayout {
     let latitude: Double
     let longitude: Double
     
-    init(latitude: Double, longitude: Double, date: Int64) {
+    init(latitude: Double, longitude: Double, date: Int64, layouter: AABubbleLayouter) {
         self.latitude = latitude
         self.longitude = longitude
-        super.init(height: mapHeight + 2, date: date, key: "location")
+        super.init(height: mapHeight + 2, date: date, key: "location", layouter: layouter)
     }
 }
 
@@ -172,7 +171,7 @@ public class AABubbleLocationCellLayouter: AABubbleLayouter {
     
     public func buildLayout(peer: ACPeer, message: ACMessage) -> AACellLayout {
         let content = message.content as! ACLocationContent
-        return AALocationCellLayout(latitude: Double(content.getLatitude()), longitude: Double(content.getLongitude()), date: Int64(message.date))
+        return AALocationCellLayout(latitude: Double(content.getLatitude()), longitude: Double(content.getLongitude()), date: Int64(message.date), layouter: self)
     }
     
     public func cellClass() -> AnyClass {

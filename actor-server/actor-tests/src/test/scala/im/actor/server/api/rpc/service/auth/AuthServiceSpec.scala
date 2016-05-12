@@ -5,6 +5,7 @@ import java.time.{ LocalDateTime, ZoneOffset }
 
 import cats.data.Xor
 import com.google.protobuf.ByteString
+import com.google.protobuf.wrappers.Int32Value
 import im.actor.api.rpc._
 import im.actor.api.rpc.auth._
 import im.actor.api.rpc.contacts.{ ApiPhoneToImport, ResponseGetContacts, UpdateContactRegistered }
@@ -13,7 +14,6 @@ import im.actor.api.rpc.users.{ ApiContactRecord, ApiContactType, ApiSex }
 import im.actor.concurrent.FutureExt
 import im.actor.server._
 import im.actor.server.activation.common.ActivationConfig
-import im.actor.server.api.rpc.RpcApiService
 import im.actor.server.api.rpc.service.contacts.ContactsServiceImpl
 import im.actor.server.model.contact.UserContact
 import im.actor.server.mtproto.codecs.protocol.MessageBoxCodec
@@ -116,7 +116,6 @@ final class AuthServiceSpec
     implicit val oauth2Service = new GoogleProvider(oauthGoogleConfig)
     val activationConfig = ActivationConfig.load.get
     implicit val service = new AuthServiceImpl
-    implicit val rpcApiService = system.actorOf(RpcApiService.props(Seq(service)))
     implicit val contactService = new ContactsServiceImpl
 
     val correctUri = "https://actor.im/registration"
@@ -138,7 +137,7 @@ final class AuthServiceSpec
 
     def e2() = {
       val (user, authId, authSid, phoneNumber) = createUser()
-      implicit val clientData = ClientData(authId, createSessionId(), Some(AuthData(user.id, authSid)))
+      implicit val clientData = ClientData(authId, createSessionId(), Some(AuthData(user.id, authSid, 42)))
 
       whenReady(startPhoneAuth(phoneNumber)) { resp ⇒
         inside(resp) {
@@ -227,7 +226,7 @@ final class AuthServiceSpec
       val (user, authId, authSid, phoneNumber) = createUser()
 
       val sessionId = createSessionId()
-      implicit val clientData = ClientData(authId, sessionId, Some(AuthData(user.id, authSid)))
+      implicit val clientData = ClientData(authId, sessionId, Some(AuthData(user.id, authSid, 42)))
 
       whenReady(UserExtension(system).delete(user.id))(identity)
 
@@ -329,7 +328,7 @@ final class AuthServiceSpec
     def e7() = {
       val (user, authId, authSid, phoneNumber) = createUser()
       val sessionId = createSessionId()
-      implicit val clientData = ClientData(authId, sessionId, Some(AuthData(user.id, authSid)))
+      implicit val clientData = ClientData(authId, sessionId, Some(AuthData(user.id, authSid, 42)))
 
       sendSessionHello(authId, sessionId)
 
@@ -441,7 +440,6 @@ final class AuthServiceSpec
           case Ok(ResponseAuth(user, _)) ⇒
             user.name shouldEqual userName
             user.sex shouldEqual userSex
-            user.phone shouldEqual Some(phoneNumber)
             user.contactInfo should have length 1
             user.contactInfo.head should matchPattern {
               case ApiContactRecord(ApiContactType.Phone, None, Some(phone), Some(_), None, _) ⇒
@@ -461,7 +459,7 @@ final class AuthServiceSpec
       //make unregistered contact
       val (regUser, regAuthId, regAuthSid, _) = createUser()
       whenReady(db.run(persist.contact.UnregisteredPhoneContactRepo.createIfNotExists(phoneNumber, regUser.id, Some("Local name"))))(_ ⇒ ())
-      val regClientData = ClientData(regAuthId, sessionId, Some(AuthData(regUser.id, regAuthSid)))
+      val regClientData = ClientData(regAuthId, sessionId, Some(AuthData(regUser.id, regAuthSid, 42)))
 
       sendSessionHello(authId, sessionId)
 
@@ -503,12 +501,12 @@ final class AuthServiceSpec
 
       val (regUser, regAuthId, regAuthSid, _) = createUser()
       val localName = Some("Bloody wild goat")
-      val regClientData = ClientData(regAuthId, sessionId, Some(AuthData(regUser.id, regAuthSid)))
+      val regClientData = ClientData(regAuthId, sessionId, Some(AuthData(regUser.id, regAuthSid, 42)))
 
       {
         implicit val clientData = regClientData
         val unregPhones = Vector(ApiPhoneToImport(phoneNumber, localName))
-        whenReady(contactService.handleImportContacts(unregPhones, Vector.empty))(_ ⇒ ())
+        whenReady(contactService.handleImportContacts(unregPhones, Vector.empty, Vector.empty))(_ ⇒ ())
       }
 
       sendSessionHello(authId, sessionId)
@@ -532,9 +530,9 @@ final class AuthServiceSpec
           _ shouldBe empty
         }
 
-        whenReady(contactService.handleGetContacts("wrongHash")) { resp ⇒
+        whenReady(contactService.handleGetContacts("wrongHash", Vector.empty)) { resp ⇒
           inside(resp) {
-            case Ok(ResponseGetContacts(users, false)) ⇒
+            case Ok(ResponseGetContacts(users, false, _)) ⇒
               users should have length 1
               val newUser = users.head
               newUser.name shouldEqual userName
@@ -548,7 +546,7 @@ final class AuthServiceSpec
     def e10() = {
       val (user, authId, authSid, phoneNumber) = createUser()
       val sessionId = createSessionId()
-      implicit val clientData = ClientData(authId, sessionId, Some(AuthData(user.id, authSid)))
+      implicit val clientData = ClientData(authId, sessionId, Some(AuthData(user.id, authSid, 42)))
 
       sendSessionHello(authId, sessionId)
 
@@ -699,7 +697,7 @@ final class AuthServiceSpec
       val email = buildEmail(gmail)
 
       val sessionId = createSessionId()
-      implicit val clientData = ClientData(authId, sessionId, Some(AuthData(user.id, authSid)))
+      implicit val clientData = ClientData(authId, sessionId, Some(AuthData(user.id, authSid, 42)))
 
       whenReady(UserExtension(system).addEmail(user.id, email))(identity)
       whenReady(UserExtension(system).delete(user.id))(identity)
@@ -931,7 +929,7 @@ final class AuthServiceSpec
       //make unregistered contact
       val (regUser, regAuthId, regAuthSid, _) = createUser()
       whenReady(db.run(persist.contact.UnregisteredEmailContactRepo.createIfNotExists(email, regUser.id, Some("Local name"))))(_ ⇒ ())
-      val regClientData = ClientData(regAuthId, sessionId, Some(AuthData(regUser.id, regAuthSid)))
+      val regClientData = ClientData(regAuthId, sessionId, Some(AuthData(regUser.id, regAuthSid, 42)))
 
       sendSessionHello(authId, sessionId)
 
@@ -967,10 +965,10 @@ final class AuthServiceSpec
     def e25() = {
       val (user, authId, authSid, _) = createUser()
       val sessionId = createSessionId()
-      implicit val clientData = ClientData(authId, sessionId, Some(AuthData(user.id, authSid)))
+      implicit val clientData = ClientData(authId, sessionId, Some(AuthData(user.id, authSid, 42)))
 
       seqUpdExt.registerGooglePushCredentials(model.push.GooglePushCredentials(authId, 22L, "hello"))
-      seqUpdExt.registerApplePushCredentials(model.push.ApplePushCredentials(authId, 22, ByteString.copyFrom("hello".getBytes)))
+      seqUpdExt.registerApplePushCredentials(model.push.ApplePushCredentials(authId, Some(Int32Value(22)), ByteString.copyFrom("hello".getBytes)))
 
       //let seqUpdateManager register credentials
       Thread.sleep(5000L)

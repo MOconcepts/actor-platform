@@ -3,13 +3,17 @@ package im.actor.sdk.controllers.conversation.messages;
 import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
 import android.widget.TextView;
 
+import im.actor.core.entity.FileReference;
+import im.actor.core.entity.ImageLocation;
 import im.actor.core.entity.Message;
 import im.actor.core.entity.content.StickerContent;
 import im.actor.sdk.ActorSDK;
 import im.actor.sdk.R;
+import im.actor.sdk.controllers.conversation.MessagesAdapter;
+import im.actor.sdk.controllers.conversation.messages.preprocessor.PreprocessedData;
+import im.actor.sdk.util.DateFormatting;
 import im.actor.sdk.util.Screen;
 import im.actor.sdk.util.Strings;
 import im.actor.sdk.view.TintImageView;
@@ -56,12 +60,17 @@ public class StickerHolder extends MessageHolder {
     }
 
     @Override
-    protected void bindData(Message message, boolean isNewMessage, PreprocessedData preprocessedData) {
+    protected void bindData(Message message, long readDate, long receiveDate, boolean isNewMessage, PreprocessedData preprocessedData) {
         StickerContent content = (StickerContent) message.getContent();
-        sticker.bind(content.getSticker(), StickerView.STICKER_FULL);
+        ImageLocation image512 = content.getImage512();
+        if (image512 == null) {
+            return;
+        }
+        FileReference fileReference = image512.getReference();
+        sticker.bind(fileReference, StickerView.STICKER_FULL);
 
-        int w = ((StickerContent) message.getContent()).getSticker().getWidth512();
-        int h = ((StickerContent) message.getContent()).getSticker().getHeight512();
+        int w = image512.getWidth();
+        int h = image512.getHeight();
 
         int maxHeight = context.getResources().getDisplayMetrics().heightPixels - Screen.dp(96 + 32);
         maxHeight = Math.min(Screen.dp(200), maxHeight);
@@ -81,26 +90,26 @@ public class StickerHolder extends MessageHolder {
         if (message.getSenderId() == myUid()) {
             stateIcon.setVisibility(View.VISIBLE);
             switch (message.getMessageState()) {
-                case ERROR:
-                    stateIcon.setResource(R.drawable.msg_error);
-                    stateIcon.setTint(COLOR_ERROR);
+                case SENT:
+                    if (message.getSortDate() <= readDate) {
+                        stateIcon.setResource(R.drawable.msg_check_2);
+                        stateIcon.setTint(COLOR_READ);
+                    } else if (message.getSortDate() <= receiveDate) {
+                        stateIcon.setResource(R.drawable.msg_check_2);
+                        stateIcon.setTint(COLOR_RECEIVED);
+                    } else {
+                        stateIcon.setResource(R.drawable.msg_check_1);
+                        stateIcon.setTint(COLOR_SENT);
+                    }
                     break;
                 default:
                 case PENDING:
                     stateIcon.setResource(R.drawable.msg_clock);
                     stateIcon.setTint(COLOR_PENDING);
                     break;
-                case READ:
-                    stateIcon.setResource(R.drawable.msg_check_2);
-                    stateIcon.setTint(COLOR_READ);
-                    break;
-                case RECEIVED:
-                    stateIcon.setResource(R.drawable.msg_check_2);
-                    stateIcon.setTint(COLOR_RECEIVED);
-                    break;
-                case SENT:
-                    stateIcon.setResource(R.drawable.msg_check_1);
-                    stateIcon.setTint(COLOR_SENT);
+                case ERROR:
+                    stateIcon.setResource(R.drawable.msg_error);
+                    stateIcon.setTint(COLOR_ERROR);
                     break;
             }
         } else {
@@ -108,7 +117,7 @@ public class StickerHolder extends MessageHolder {
         }
 
         // Update time
-        time.setText(Strings.formatTime(message.getDate()));
+        time.setText(DateFormatting.formatTime(message.getDate()));
 
     }
 

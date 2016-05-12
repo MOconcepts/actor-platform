@@ -1,8 +1,10 @@
 package im.actor.server.api.rpc.service.messaging
 
+import akka.http.scaladsl.util.FastFuture
 import akka.util.Timeout
 import cats.data.Xor
-import im.actor.api.rpc._
+import im.actor.api.rpc.CommonRpcErrors.IntenalError
+import im.actor.api.rpc.{ CommonRpcErrors, _ }
 import im.actor.api.rpc.messaging._
 import im.actor.api.rpc.misc._
 import im.actor.api.rpc.peers._
@@ -17,7 +19,7 @@ object MessagingRpcErors {
   val NotLastMessage = RpcError(400, "NOT_LAST_MESSAGE", "You are trying to edit not last message.", false, None)
   val NotInTimeWindow = RpcError(400, "NOT_IN_TIME_WINDOW", "You can't edit message sent more than 5 minutes age.", false, None)
   val NotTextMessage = RpcError(400, "NOT_TEXT_MESSAGE", "You can edit only text messages.", false, None)
-  val IntenalError = RpcError(500, "INTERNAL_ERROR", "", false, None)
+  val NotUniqueRandomId = RpcError(400, "RANDOM_ID_NOT_UNIQUE", "", false, None)
 }
 
 private[messaging] trait MessagingHandlers extends PeersImplicits
@@ -35,7 +37,14 @@ private[messaging] trait MessagingHandlers extends PeersImplicits
   // TODO: configurable
   private val editTimeWindow: Long = 5.minutes.toMillis
 
-  override def doHandleSendMessage(outPeer: ApiOutPeer, randomId: Long, message: ApiMessage, clientData: ClientData): Future[HandlerResult[ResponseSeqDate]] =
+  override def doHandleSendMessage(
+    outPeer:         ApiOutPeer,
+    randomId:        Long,
+    message:         ApiMessage,
+    isOnlyForUser:   Option[Int],
+    quotedReference: Option[ApiMessageOutReference],
+    clientData:      ClientData
+  ): Future[HandlerResult[ResponseSeqDate]] =
     authorized(clientData) { implicit client ⇒
       (for (
         s ← fromFuture(dialogExt.sendMessage(
@@ -45,10 +54,14 @@ private[messaging] trait MessagingHandlers extends PeersImplicits
           senderAuthId = Some(client.authId),
           randomId = randomId,
           message = message,
-          accessHash = Some(outPeer.accessHash)
+          accessHash = Some(outPeer.accessHash),
+          forUserId = isOnlyForUser
         ))
       ) yield ResponseSeqDate(s.seq, s.state.toByteArray, s.date)).value
     }
+
+  override def doHandleNotifyDialogOpened(peer: ApiOutPeer, clientData: ClientData): Future[HandlerResult[ResponseVoid]] =
+    FastFuture.failed(new RuntimeException("Not implemented"))
 
   override def doHandleUpdateMessage(outPeer: ApiOutPeer, randomId: Long, updatedMessage: ApiMessage, clientData: ClientData): Future[HandlerResult[ResponseSeqDate]] = {
     authorized(clientData) { implicit client ⇒

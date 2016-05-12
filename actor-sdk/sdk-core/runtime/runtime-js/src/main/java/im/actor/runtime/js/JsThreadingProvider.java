@@ -13,13 +13,17 @@ import im.actor.runtime.js.threading.JsAtomicLong;
 import im.actor.runtime.js.threading.JsDispatcher;
 import im.actor.runtime.js.threading.JsImmediateDispatcher;
 import im.actor.runtime.js.threading.JsThreadLocal;
+import im.actor.runtime.js.threading.JsWeakReference;
 import im.actor.runtime.threading.AtomicIntegerCompat;
 import im.actor.runtime.threading.AtomicLongCompat;
 import im.actor.runtime.threading.Dispatcher;
 import im.actor.runtime.threading.ImmediateDispatcher;
 import im.actor.runtime.threading.ThreadLocalCompat;
+import im.actor.runtime.threading.WeakReferenceCompat;
 
 public class JsThreadingProvider implements ThreadingRuntime {
+
+    public static boolean ALLOW_WEB_WORKER_SCHEDULER = true;
 
     @Override
     public long getActorTime() {
@@ -58,12 +62,17 @@ public class JsThreadingProvider implements ThreadingRuntime {
     }
 
     @Override
+    public <T> WeakReferenceCompat<T> createWeakReference(T val) {
+        return new JsWeakReference<>(val);
+    }
+
+    @Override
     public Dispatcher createDispatcher(String name) {
         return new JsDispatcher();
     }
 
     @Override
     public ImmediateDispatcher createImmediateDispatcher(String name, ThreadPriority priority) {
-        return new JsImmediateDispatcher(name);
+        return new JsImmediateDispatcher(ALLOW_WEB_WORKER_SCHEDULER, name);
     }
 }

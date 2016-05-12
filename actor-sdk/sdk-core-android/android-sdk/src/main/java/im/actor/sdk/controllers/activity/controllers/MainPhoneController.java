@@ -28,6 +28,7 @@ import com.getbase.floatingactionbutton.FloatingActionButton;
 
 import java.util.ArrayList;
 
+import im.actor.core.entity.Contact;
 import im.actor.core.entity.Dialog;
 import im.actor.core.entity.SearchEntity;
 import im.actor.sdk.ActorSDK;
@@ -38,13 +39,12 @@ import im.actor.runtime.generic.mvvm.DisplayList;
 import im.actor.sdk.R;
 import im.actor.sdk.controllers.Intents;
 import im.actor.sdk.controllers.activity.AddContactActivity;
-import im.actor.sdk.controllers.fragment.compose.ComposeActivity;
-import im.actor.sdk.controllers.fragment.compose.CreateGroupActivity;
-import im.actor.sdk.controllers.fragment.contacts.ContactsFragment;
-import im.actor.sdk.controllers.fragment.dialogs.DialogsFragment;
+import im.actor.sdk.controllers.compose.ComposeActivity;
+import im.actor.sdk.controllers.compose.CreateGroupActivity;
+import im.actor.sdk.controllers.contacts.ContactsFragment;
+import im.actor.sdk.controllers.dialogs.DialogsFragment;
 import im.actor.sdk.controllers.fragment.help.HelpActivity;
 import im.actor.sdk.controllers.fragment.main.SearchAdapter;
-import im.actor.sdk.controllers.fragment.settings.MyProfileActivity;
 import im.actor.sdk.util.Screen;
 import im.actor.sdk.util.Fonts;
 import im.actor.sdk.view.adapters.FragmentNoMenuStatePagerAdapter;
@@ -86,10 +86,7 @@ public class MainPhoneController extends MainBaseController {
     private View syncInProgressView;
     private View emptyContactsView;
 
-    private View fabContent;
     private com.getbase.floatingactionbutton.FloatingActionButton fabRoot;
-
-    private boolean isFabVisible = false;
 
     private String joinGroupUrl;
     private String sendUriString = "";
@@ -98,16 +95,15 @@ public class MainPhoneController extends MainBaseController {
     private int shareUser;
     private String forwardText = "";
     private String forwardTextRaw = "";
-    private String forwardDocDescriptor = "";
-    private boolean forwardDocIsDoc = true;
+    private byte[] docContent = null;
 
     public MainPhoneController(ActorMainActivity mainActivity) {
         super(mainActivity);
     }
 
     @Override
-    public void onItemClicked(final Dialog item) {
-        if((sendUriMultiple!= null && !sendUriMultiple.isEmpty()) || (sendUriString!= null && !sendUriString.isEmpty())){
+    public void onDialogClicked(final Dialog item) {
+        if ((sendUriMultiple != null && !sendUriMultiple.isEmpty()) || docContent != null || (sendUriString != null && !sendUriString.isEmpty())) {
             new AlertDialog.Builder(getActivity())
                     .setMessage(getActivity().getString(R.string.confirm_share) + " " + item.getDialogTitle() + "?")
                     .setPositiveButton(R.string.dialog_ok, new DialogInterface.OnClickListener() {
@@ -123,23 +119,61 @@ public class MainPhoneController extends MainBaseController {
                         }
                     })
                     .show();
-        }else{
+        } else {
             openDialog(item);
         }
     }
 
-    public void openDialog(Dialog item) {
+    @Override
+    public void onContactClicked(final Contact contact) {
+        if ((sendUriMultiple != null && !sendUriMultiple.isEmpty()) || docContent != null || (sendUriString != null && !sendUriString.isEmpty())) {
+            new AlertDialog.Builder(getActivity())
+                    .setMessage(getActivity().getString(R.string.confirm_share) + " " + contact.getName() + "?")
+                    .setPositiveButton(R.string.dialog_ok, new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            openContactDialog(contact);
+                        }
+                    })
+                    .setNegativeButton(R.string.dialog_cancel, new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            dialog.dismiss();
+                        }
+                    })
+                    .show();
+        } else {
+            openContactDialog(contact);
+        }
+    }
+
+    private void openDialog(Dialog item) {
         startActivity(Intents.openDialog(item.getPeer(), false, getActivity()).putExtra("send_uri", sendUriString)
                 .putExtra("send_uri_multiple", sendUriMultiple)
                 .putExtra("send_text", sendText)
                 .putExtra("forward_text", forwardText)
                 .putExtra("forward_text_raw", forwardTextRaw)
-                .putExtra("forward_doc_descriptor", forwardDocDescriptor)
-                .putExtra("forward_doc_is_doc", forwardDocIsDoc)
+                .putExtra("forward_content", docContent)
                 .putExtra("share_user", shareUser));
+        clearShare();
+    }
+
+    private void openContactDialog(Contact contact) {
+        getActivity().startActivity(Intents.openPrivateDialog(contact.getUid(), true, getActivity()).putExtra("send_uri", sendUriString)
+                .putExtra("send_uri_multiple", sendUriMultiple)
+                .putExtra("send_text", sendText)
+                .putExtra("forward_text", forwardText)
+                .putExtra("forward_text_raw", forwardTextRaw)
+                .putExtra("forward_content", docContent)
+                .putExtra("share_user", shareUser));
+
+        clearShare();
+    }
+
+    private void clearShare() {
         sendUriMultiple.clear();
         sendUriString = "";
-        forwardDocDescriptor = "";
+        docContent = null;
         forwardText = "";
         forwardTextRaw = "";
         sendText = "";
@@ -177,13 +211,6 @@ public class MainPhoneController extends MainBaseController {
         inviteBtnText.setTypeface(Fonts.medium());
         inviteBtnText.setTextColor(style.getTextPrimaryInvColor());
 
-        isFabVisible = false;
-
-        fabContent = findViewById(R.id.fabContainer);
-        ((TextView) fabContent.findViewById(R.id.fab_add_contact_text)).setTextColor(style.getTextPrimaryColor());
-        ((TextView) fabContent.findViewById(R.id.fab_create_group_text)).setTextColor(style.getTextPrimaryColor());
-        ((TextView) fabContent.findViewById(R.id.fab_compose_text)).setTextColor(style.getTextPrimaryColor());
-        fabContent.setBackgroundColor(ActorSDK.sharedActor().style.getMainFabbgColor());
         fabRoot = (FloatingActionButton) findViewById(R.id.rootFab);
         if (ActorSDK.sharedActor().style.getFabColor() != 0) {
             fabRoot.setColorNormal(ActorSDK.sharedActor().style.getFabColor());
@@ -191,19 +218,7 @@ public class MainPhoneController extends MainBaseController {
         if (ActorSDK.sharedActor().style.getFabPressedColor() != 0) {
             fabRoot.setColorPressed(ActorSDK.sharedActor().style.getFabPressedColor());
         }
-        fabRoot.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showFab();
-            }
-        });
-
-        fabContent.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                goneFab();
-            }
-        });
+        fabRoot.setOnClickListener(v -> startActivity(new Intent(getActivity(), ComposeActivity.class)));
 
         searchList = (RecyclerView) findViewById(R.id.searchList);
         searchList.setLayoutManager(new ChatLinearLayoutManager(getActivity()));
@@ -253,58 +268,8 @@ public class MainPhoneController extends MainBaseController {
             }
         });
 
-        com.getbase.floatingactionbutton.FloatingActionButton fabCompose = (FloatingActionButton) findViewById(R.id.composeContainer);
-        if (style.getFabColor() != 0) {
-            fabCompose.setColorNormal(style.getFabColor());
-        }
-        if (style.getFabPressedColor() != 0) {
-            fabCompose.setColorPressed(style.getFabPressedColor());
-        }
-        fabCompose.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                goneFab();
-                startActivity(new Intent(getActivity(), ComposeActivity.class));
-            }
-        });
 
-        com.getbase.floatingactionbutton.FloatingActionButton fabCreateGroup = (FloatingActionButton) findViewById(R.id.createGroupContainer);
-        if (style.getFabColor() != 0) {
-            fabCreateGroup.setColorNormal(style.getFabColor());
-        }
-        if (style.getFabPressedColor() != 0) {
-            fabCreateGroup.setColorPressed(style.getFabPressedColor());
-        }
-        fabCreateGroup.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                goneFab();
-                startActivity(new Intent(getActivity(), CreateGroupActivity.class));
-            }
-        });
-
-        com.getbase.floatingactionbutton.FloatingActionButton fabAddContact = (FloatingActionButton) findViewById(R.id.addContactContainer);
-        if (style.getFabColor() != 0) {
-            fabAddContact.setColorNormal(style.getFabColor());
-        }
-        if (style.getFabPressedColor() != 0) {
-            fabAddContact.setColorPressed(style.getFabPressedColor());
-        }
-        fabAddContact.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                goneFab();
-                startActivity(new Intent(getActivity(), AddContactActivity.class));
-            }
-        });
-
-
-        findViewById(R.id.addContactButton).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startActivity(new Intent(getActivity(), AddContactActivity.class));
-            }
-        });
+        findViewById(R.id.addContactButton).setOnClickListener(v -> startActivity(new Intent(getActivity(), AddContactActivity.class)));
 
         findViewById(R.id.inviteButton).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -332,7 +297,7 @@ public class MainPhoneController extends MainBaseController {
         if (intent != null) {
             if (intent.getAction() != null) {
                 if (intent.getAction().equals(Intent.ACTION_VIEW) && intent.getData() != null) {
-                    joinGroupUrl = getIntent().getData().toString();
+                    joinGroupUrl = intent.getData().toString();
                 } else if (intent.getAction().equals(Intent.ACTION_SEND)) {
                     if ("text/plain".equals(getIntent().getType())) {
                         sendText = intent.getStringExtra(Intent.EXTRA_TEXT);
@@ -356,9 +321,8 @@ public class MainPhoneController extends MainBaseController {
                 } else if (extras.containsKey("forward_text")) {
                     forwardText = extras.getString("forward_text");
                     forwardTextRaw = extras.getString("forward_text_raw");
-                } else if (extras.containsKey("forward_doc_descriptor")) {
-                    forwardDocDescriptor = extras.getString("forward_doc_descriptor");
-                    forwardDocIsDoc = extras.getBoolean("forward_doc_is_doc");
+                } else if (extras.containsKey("forward_content")) {
+                    docContent = extras.getByteArray("forward_content");
                 }
             }
         }
@@ -434,10 +398,9 @@ public class MainPhoneController extends MainBaseController {
 
         // Icons
         // int width = Screen.dp(72 * 2);
-        int width = Screen.dp(120 * 2);
 
-        tabsContainer.addView(barTabs, new FrameLayout.LayoutParams(width, Screen.dp(56)));
-        Toolbar.LayoutParams lp = new Toolbar.LayoutParams(width, Screen.dp(56));
+        tabsContainer.addView(barTabs, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(56)));
+        Toolbar.LayoutParams lp = new Toolbar.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(56));
         tabsContainer.setLayoutParams(lp);
         ab.setCustomView(tabsContainer);
     }
@@ -494,10 +457,6 @@ public class MainPhoneController extends MainBaseController {
 
     @Override
     public boolean onBackPressed() {
-        if (isFabVisible) {
-            goneFab();
-            return true;
-        }
         if (isSearchVisible) {
             hideSearch();
             return true;
@@ -510,20 +469,6 @@ public class MainPhoneController extends MainBaseController {
     public void onPause() {
         super.onPause();
         hideSearch();
-    }
-
-    private void showFab() {
-        if (!isFabVisible) {
-            isFabVisible = true;
-            showView(fabContent, true, false);
-        }
-    }
-
-    private void goneFab() {
-        if (isFabVisible) {
-            isFabVisible = false;
-            goneView(fabContent, true, false);
-        }
     }
 
     private void showSearch() {
@@ -626,23 +571,21 @@ public class MainPhoneController extends MainBaseController {
             switch (position) {
                 default:
                 case 0:
-                    return getDialogsFragment();
+                    return getDialogsFragment(new DialogsFragment());
                 case 1:
-                    return getContactsFragment();
+                    return getContactsFragment(new ContactsFragment());
 
             }
         }
 
         @NonNull
-        public ContactsFragment getContactsFragment() {
-            ContactsFragment res2 = new ContactsFragment();
+        public ContactsFragment getContactsFragment(ContactsFragment res2) {
             res2.setHasOptionsMenu(false);
             return res2;
         }
 
         @NonNull
-        public DialogsFragment getDialogsFragment() {
-            DialogsFragment res1 = new DialogsFragment();
+        public DialogsFragment getDialogsFragment(DialogsFragment res1) {
             Bundle arguments = new Bundle();
             arguments.putString("invite_url", joinGroupUrl);
             res1.setArguments(arguments);

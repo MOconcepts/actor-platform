@@ -1,29 +1,31 @@
 import path from 'path';
 import webpack from 'webpack';
+import autoprefixer from 'autoprefixer';
+import ExtractTextPlugin from 'extract-text-webpack-plugin';
+
+const sassLoaders = [
+  // 'css?sourceMap&modules',
+  'css?sourceMap',
+  'postcss',
+  'sass?sourceMap&outputStyle=expanded&includePaths[]=' + path.resolve(__dirname, 'node_modules')
+];
 
 export default {
   cache: true,
   debug: true,
-  devtool: '#eval-source-map',
-  hotComponents: true,
+  devtool: '#inline-source-map',
   entry: {
     app: [
-      'webpack-dev-server/client?http://localhost:3000',
-      'webpack/hot/dev-server',
-      './devapp/index.js'
-    ],
-    styles: [
-      'webpack-dev-server/client?http://localhost:3000',
-      'webpack/hot/dev-server',
-      './devapp/styles.js'
+      './devapp/index.js',
+      './src/styles/index.scss'
     ]
   },
   output: {
     path: path.join(__dirname, 'dist'),
-    publicPath: './',
+    publicPath: '/',
     filename: '[name].js',
     chunkFilename: '[chunkhash].js',
-    sourceMapFilename: '[name].map'
+    sourceMapFilename: '[file][hash].map'
   },
   resolve: {
     modulesDirectories: ['node_modules'],
@@ -40,18 +42,13 @@ export default {
     ],
     loaders: [{
       test: /\.(scss|css)$/,
-      loaders: [
-        'style',
-        'css',
-        'autoprefixer?browsers=last 3 versions',
-        'sass?outputStyle=expanded&includePaths[]=' + path.resolve(__dirname, 'node_modules')
-      ]
+      loader: ExtractTextPlugin.extract('style', sassLoaders.join('!'))
     }, {
       test: /\.js$/,
       loaders: [
         'babel?cacheDirectory'
       ],
-      exclude: /(node_modules)/
+      exclude: /(node_modules|vendor)/
     }, {
       test: /\.json$/,
       loaders: ['json']
@@ -68,14 +65,19 @@ export default {
   },
   plugins: [
     new webpack.DefinePlugin({
+      __ACTOR_SDK_VERSION__: JSON.stringify(require('./package.json').version),
+      __ACTOR_CORE_VERSION__: JSON.stringify(require('actor-js/package.json').version),
       'process.env': {
         'NODE_ENV': JSON.stringify('development')
       }
     }),
+    new ExtractTextPlugin('index.css', { allChunks: true }),
     new webpack.ResolverPlugin([
       new webpack.ResolverPlugin.DirectoryDescriptionFilePlugin('package.json', ['main'])
     ], ['context']),
-    new webpack.HotModuleReplacementPlugin(),
     new webpack.NoErrorsPlugin()
+  ],
+  postcss: [
+    autoprefixer({ browsers: ['last 3 versions'] })
   ]
 };

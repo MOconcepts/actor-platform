@@ -10,14 +10,12 @@ import android.view.MenuItem;
 import im.actor.sdk.ActorSDK;
 import im.actor.sdk.R;
 
-/**
- * Created by ex3ndr on 29.12.14.
- */
 public class BaseFragmentActivity extends BaseActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         assert getSupportActionBar() != null;
+        getSupportActionBar().setElevation(0);
         getSupportActionBar().setDisplayShowHomeEnabled(false);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setDisplayShowTitleEnabled(true);
@@ -29,7 +27,7 @@ public class BaseFragmentActivity extends BaseActivity {
 
         setContentView(R.layout.activity_base_fragment);
         findViewById(R.id.content_frame).setBackgroundColor(ActorSDK.sharedActor().style.getMainBackgroundColor());
-        getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        getWindow().setBackgroundDrawable(new ColorDrawable(ActorSDK.sharedActor().style.getMainBackgroundColor()));
     }
 
     public void showFragment(final Fragment fragment, final boolean addToBackStack, final boolean isAnimated) {

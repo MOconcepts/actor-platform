@@ -28,7 +28,7 @@ public class AABubbleContactCell: AABubbleCell, ABNewPersonViewControllerDelegat
         
         contentInsets = UIEdgeInsets(top: 1, left: 1, bottom: 1, right: 1)
         
-        tapView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: "contactDidTap"))
+        tapView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(AABubbleContactCell.contactDidTap)))
         tapView.userInteractionEnabled = true
     }
 
@@ -111,7 +111,7 @@ public class AABubbleContactCell: AABubbleCell, ABNewPersonViewControllerDelegat
         controller.dismissViewControllerAnimated(true, completion: nil)
     }
  
-    public override func bind(message: ACMessage, reuse: Bool, cellLayout: AACellLayout, setting: AACellSetting) {
+    public override func bind(message: ACMessage, receiveDate: jlong, readDate: jlong, reuse: Bool, cellLayout: AACellLayout, setting: AACellSetting) {
         
         let contactLayout = cellLayout as! AAContactCellLayout
         
@@ -189,11 +189,11 @@ public class AAContactCellLayout: AACellLayout {
     let name: String
     let records: [String]
     
-    init(name: String, records: [String], date: Int64) {
+    init(name: String, records: [String], date: Int64, layouter: AABubbleLayouter) {
         self.name = name
         self.records = records
         let height = max(44, records.count * 18 + 22) + 12
-        super.init(height: CGFloat(height), date: date, key: "location")
+        super.init(height: CGFloat(height), date: date, key: "location", layouter: layouter)
     }
 }
 
@@ -223,6 +223,6 @@ public class AABubbleContactCellLayouter: AABubbleLayouter {
         for i in 0..<content.getEmails().size() {
             records.append(content.getEmails().getWithInt(i) as! String)
         }
-        return AAContactCellLayout(name: content.getName(), records: records, date: Int64(message.date))
+        return AAContactCellLayout(name: content.getName(), records: records, date: Int64(message.date), layouter: self)
     }
 }

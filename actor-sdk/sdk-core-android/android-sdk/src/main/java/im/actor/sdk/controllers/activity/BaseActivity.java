@@ -14,6 +14,16 @@ import im.actor.core.viewmodel.Command;
 import im.actor.core.viewmodel.CommandCallback;
 import im.actor.core.viewmodel.GroupVM;
 import im.actor.core.viewmodel.UserVM;
+import im.actor.runtime.actors.Actor;
+import im.actor.runtime.actors.ActorCreator;
+import im.actor.runtime.actors.ActorRef;
+import im.actor.runtime.actors.ActorSystem;
+import im.actor.runtime.actors.Props;
+import im.actor.runtime.actors.messages.PoisonPill;
+import im.actor.runtime.function.BiFunction;
+import im.actor.runtime.function.Consumer;
+import im.actor.runtime.function.Function;
+import im.actor.runtime.promise.Promise;
 import im.actor.sdk.ActorSDK;
 import im.actor.sdk.R;
 import im.actor.sdk.controllers.fragment.ActorBinder;
@@ -25,6 +35,7 @@ import im.actor.runtime.mvvm.Value;
 import static im.actor.sdk.util.ActorSDKMessenger.messenger;
 
 public class BaseActivity extends AppCompatActivity {
+
     private final ActorBinder BINDER = new ActorBinder();
 
     private boolean isResumed = false;
@@ -32,6 +43,8 @@ public class BaseActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ActorSDK.sharedActor().waitForReady();
+
         onCreateToolbar();
         notifyOnResume();
 
@@ -59,13 +72,25 @@ public class BaseActivity extends AppCompatActivity {
         BINDER.bind(textView, value);
     }
 
+    public <T> void bind(TextView textView, Value<T> value, Function<T, CharSequence> bind) {
+        BINDER.bind(value, (val, valueModel) -> {
+            textView.setText(bind.apply(val));
+        });
+    }
+
+    public <T1, T2> void bind(TextView textView, Value<T1> value1, Value<T2> value2, BiFunction<T1, T2, CharSequence> bind) {
+        BINDER.bind(value1, value2, (val, valueModel, val2, valueModel2) -> {
+            textView.setText(bind.apply(val, val2));
+        });
+    }
+
     public void bind(final AvatarView avatarView, final int id,
                      final Value<Avatar> avatar, final Value<String> name) {
         BINDER.bind(avatarView, id, avatar, name);
     }
 
-    public void bind(final TextView textView, final View container, final UserVM user) {
-        BINDER.bind(textView, container, user);
+    public void bind(final TextView textView, final UserVM user) {
+        BINDER.bind(textView, user);
     }
 
     public void bind(final TextView textView, View titleContainer, GroupVM value) {
@@ -174,8 +199,7 @@ public class BaseActivity extends AppCompatActivity {
         messenger().onActivityClosed();
     }
 
-    protected boolean getIsResumed()
-    {
+    protected boolean getIsResumed() {
         return isResumed;
     }
 
@@ -188,13 +212,13 @@ public class BaseActivity extends AppCompatActivity {
         cmd.start(new CommandCallback<T>() {
             @Override
             public void onResult(T res) {
-                dismissDiaog(progressDialog);
+                dismissDialog(progressDialog);
                 callback.onResult(res);
             }
 
             @Override
             public void onError(Exception e) {
-                dismissDiaog(progressDialog);
+                dismissDialog(progressDialog);
                 callback.onError(e);
             }
         });
@@ -217,17 +241,27 @@ public class BaseActivity extends AppCompatActivity {
         cmd.start(new CommandCallback<T>() {
             @Override
             public void onResult(T res) {
-                dismissDiaog(progressDialog);
+                dismissDialog(progressDialog);
             }
 
             @Override
             public void onError(Exception e) {
-                dismissDiaog(progressDialog);
+                dismissDialog(progressDialog);
             }
         });
     }
 
-    public void dismissDiaog(ProgressDialog progressDialog) {
+    public <T> void execute(Promise<T> promise) {
+        execute(promise, R.string.progress_common);
+    }
+
+    public <T> void execute(Promise<T> promise, int title) {
+        final ProgressDialog dialog = ProgressDialog.show(this, "", getString(title), true, false);
+        promise.then(t -> dismissDialog(dialog))
+                .failure(e -> dismissDialog(dialog));
+    }
+
+    public void dismissDialog(ProgressDialog progressDialog) {
         try {
             progressDialog.dismiss();
         } catch (Exception ex) {

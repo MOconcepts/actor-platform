@@ -9,6 +9,11 @@ import CSSTransitionGroup from 'react-addons-css-transition-group';
 import MessageActionCreators from '../../../actions/MessageActionCreators';
 
 class MessageReactions extends Component {
+  static propTypes = {
+    peer: PropTypes.object.isRequired,
+    message: PropTypes.object.isRequired
+  };
+
   constructor(props) {
     super(props);
 
@@ -17,29 +22,24 @@ class MessageReactions extends Component {
     };
   }
 
-  static propTypes = {
-    peer: PropTypes.object.isRequired,
-    message: PropTypes.object.isRequired
-  };
-
-  componentWillReceiveProps(nextProps) {
+  componentWillReceiveProps() {
     if (this.state.isThisMyReaction) {
       this.setState({
         canAnimateHeart: false,
         isThisMyReaction: false
       })
     } else {
-      this.setState({canAnimateHeart: true})
+      this.setState({ canAnimateHeart: true })
     }
   }
 
   handleAddLike = () => {
     MessageActionCreators.addLike(this.props.peer, this.props.message.rid);
-    this.setState({isThisMyReaction: true})
+    this.setState({ isThisMyReaction: true })
   };
   handleRemoveLike = () => {
     MessageActionCreators.removeLike(this.props.peer, this.props.message.rid);
-    this.setState({isThisMyReaction: true})
+    this.setState({ isThisMyReaction: true })
   };
 
   render() {
@@ -48,7 +48,7 @@ class MessageReactions extends Component {
     const hasReactions = message.reactions.length > 0;
 
     let counter;
-    let icon = <i className="icon material-icons" onClick={this.handleAddLike}>favorite</i>;
+    let icon = <i className="icon icon-favorite material-icons" onClick={this.handleAddLike}></i>;
     let reactionsClassName = 'message__actions__like';
 
     if (hasReactions) {
@@ -61,7 +61,7 @@ class MessageReactions extends Component {
       });
 
       if (amILikeThat) {
-        icon = <i className="icon material-icons" onClick={this.handleRemoveLike}>favorite</i>
+        icon = <i className="icon icon-favorite material-icons" onClick={this.handleRemoveLike}></i>
       }
 
       if (message.reactions[0].uids.length > 0) {

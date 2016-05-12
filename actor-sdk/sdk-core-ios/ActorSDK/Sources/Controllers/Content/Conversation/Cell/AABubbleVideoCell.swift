@@ -44,10 +44,10 @@ public class AABubbleVideoCell: AABubbleBaseFileCell {
         contentView.addSubview(statusView)
         contentView.addSubview(playView)
         
-        preview.addGestureRecognizer(UITapGestureRecognizer(target: self, action: "mediaDidTap"))
+        preview.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(AABubbleVideoCell.mediaDidTap)))
         preview.userInteractionEnabled = true
         
-        playView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: "mediaDidTap"))
+        playView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(AABubbleVideoCell.mediaDidTap)))
         playView.userInteractionEnabled = true
         
         contentInsets = UIEdgeInsets(top: 1, left: 1, bottom: 1, right: 1)
@@ -59,7 +59,7 @@ public class AABubbleVideoCell: AABubbleBaseFileCell {
     
     // Binding
     
-    public override func bind(message: ACMessage, reuse: Bool, cellLayout: AACellLayout, setting: AACellSetting) {
+    public override func bind(message: ACMessage, receiveDate: jlong, readDate: jlong, reuse: Bool, cellLayout: AACellLayout, setting: AACellSetting) {
         self.bindedLayout = cellLayout as! VideoCellLayout
         
         bubbleInsets = UIEdgeInsets(
@@ -99,31 +99,26 @@ public class AABubbleVideoCell: AABubbleBaseFileCell {
         // Update status
         if (isOut) {
             statusView.hidden = false
-            switch(message.messageState.ordinal()) {
-            case ACMessageState.PENDING().ordinal():
-                self.statusView.image = appStyle.chatIconClock;
-                self.statusView.tintColor = appStyle.chatStatusMediaSending
-                break;
-            case ACMessageState.SENT().ordinal():
-                self.statusView.image = appStyle.chatIconCheck1;
-                self.statusView.tintColor = appStyle.chatStatusMediaSent
-                break;
-            case ACMessageState.RECEIVED().ordinal():
-                self.statusView.image = appStyle.chatIconCheck2;
-                self.statusView.tintColor = appStyle.chatStatusMediaReceived
-                break;
-            case ACMessageState.READ().ordinal():
-                self.statusView.image = appStyle.chatIconCheck2;
-                self.statusView.tintColor = appStyle.chatStatusMediaRead
-                break;
-            case ACMessageState.ERROR().ordinal():
-                self.statusView.image = appStyle.chatIconError;
+            switch(message.messageState.toNSEnum()) {
+            case .SENT:
+                if message.sortDate <= readDate {
+                    self.statusView.image = appStyle.chatIconCheck2
+                    self.statusView.tintColor = appStyle.chatStatusMediaRead
+                } else if message.sortDate <= receiveDate {
+                    self.statusView.image = appStyle.chatIconCheck2
+                    self.statusView.tintColor = appStyle.chatStatusMediaReceived
+                } else {
+                    self.statusView.image = appStyle.chatIconCheck1
+                    self.statusView.tintColor = appStyle.chatStatusMediaSent
+                }
+            case .ERROR:
+                self.statusView.image = appStyle.chatIconError
                 self.statusView.tintColor = appStyle.chatStatusMediaError
                 break
             default:
-                self.statusView.image = appStyle.chatIconClock;
+                self.statusView.image = appStyle.chatIconClock
                 self.statusView.tintColor = appStyle.chatStatusMediaSending
-                break;
+                break
             }
         } else {
             statusView.hidden = true
@@ -328,7 +323,7 @@ public class VideoCellLayout: AACellLayout {
     /**
      Creting layout for media bubble
      */
-    public init(id: Int64, width: CGFloat, height:CGFloat, date: Int64, fastThumb: ACFastThumb?, autoDownload: Bool) {
+    public init(id: Int64, width: CGFloat, height:CGFloat, date: Int64, fastThumb: ACFastThumb?, autoDownload: Bool, layouter: AABubbleLayouter) {
         
         // Saving content size
         self.contentSize = CGSizeMake(width, height)
@@ -348,23 +343,23 @@ public class VideoCellLayout: AACellLayout {
         self.fastThumb = fastThumb?.getImage().toNSData()
         
         // Creating layout
-        super.init(height: self.screenSize.height + 2, date: date, key: "media")
+        super.init(height: self.screenSize.height + 2, date: date, key: "media", layouter: layouter)
     }
     
     
     /**
      Creating layout for video content
      */
-    public convenience init(id: Int64, videoContent: ACVideoContent, date: Int64) {
-        self.init(id: id, width: CGFloat(videoContent.getW()), height: CGFloat(videoContent.getH()), date: date, fastThumb: videoContent.getFastThumb(),autoDownload: false)
+    public convenience init(id: Int64, videoContent: ACVideoContent, date: Int64, layouter: AABubbleLayouter) {
+        self.init(id: id, width: CGFloat(videoContent.getW()), height: CGFloat(videoContent.getH()), date: date, fastThumb: videoContent.getFastThumb(), autoDownload: false, layouter: layouter)
     }
     
     /**
      Creating layout for message
      */
-    public convenience init(message: ACMessage) {
+    public convenience init(message: ACMessage, layouter: AABubbleLayouter) {
         if let content = message.content as? ACVideoContent {
-            self.init(id: Int64(message.rid), videoContent: content, date: Int64(message.date))
+            self.init(id: Int64(message.rid), videoContent: content, date: Int64(message.date), layouter: layouter)
         } else {
             fatalError("Unsupported content for media cell")
         }
@@ -383,7 +378,7 @@ public class AABubbleVideoCellLayouter: AABubbleLayouter {
     }
     
     public func buildLayout(peer: ACPeer, message: ACMessage) -> AACellLayout {
-        return VideoCellLayout(message: message)
+        return VideoCellLayout(message: message, layouter: self)
     }
     
     public func cellClass() -> AnyClass {

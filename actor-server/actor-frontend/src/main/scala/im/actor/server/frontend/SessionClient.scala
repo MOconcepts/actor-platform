@@ -1,6 +1,6 @@
 package im.actor.server.frontend
 
-import java.security.SecureRandom
+import java.net.InetAddress
 
 import akka.actor._
 import akka.pattern.pipe
@@ -8,12 +8,12 @@ import akka.stream.actor.ActorPublisher
 import akka.stream.actor.ActorPublisherMessage.{ Cancel, Request }
 import com.google.protobuf.ByteString
 import im.actor.crypto.box.CBCHmacBox
-import im.actor.crypto.primitives.kuznechik.KuznechikCipher
+import im.actor.crypto.primitives.kuznechik.KuznechikFastEngine
 import im.actor.crypto.primitives.streebog.Streebog256
 import im.actor.crypto.primitives.aes.AESFastEngine
 import im.actor.crypto.primitives.digest.SHA256
 import im.actor.crypto.primitives.util.ByteStrings
-import im.actor.crypto.{ ActorProtoKey }
+import im.actor.crypto.ActorProtoKey
 import im.actor.server.db.DbExtension
 import im.actor.server.model.MasterKey
 import im.actor.server.mtproto.codecs.protocol._
@@ -23,7 +23,7 @@ import im.actor.server.mtproto.{ transport ⇒ T }
 import im.actor.server.persist.{ AuthIdRepo, MasterKeyRepo }
 import im.actor.server.session.{ HandleMessageBox, SessionEnvelope, SessionRegion }
 import im.actor.util.ThreadLocalSecureRandom
-import scodec.{ DecodeResult, Attempt }
+import scodec.{ Attempt, DecodeResult }
 import scodec.bits.BitVector
 import slick.dbio.DBIO
 
@@ -43,7 +43,7 @@ private[frontend] object SessionClient {
   @SerialVersionUID(1L)
   private final case class IdsObtained(authId: Option[Either[Long, MasterKey]], sessionId: Long)
 
-  def props(sessionRegion: SessionRegion) = Props(classOf[SessionClient], sessionRegion)
+  def props(sessionRegion: SessionRegion, remoteAddr: InetAddress) = Props(classOf[SessionClient], sessionRegion, remoteAddr)
 }
 
 final class CryptoHelper(protoKeys: ActorProtoKey) {
@@ -58,7 +58,7 @@ final class CryptoHelper(protoKeys: ActorProtoKey) {
       )
 
       val Russia = new CBCHmacBox(
-        new KuznechikCipher(protoKeys.getServerRussianKey),
+        new KuznechikFastEngine(protoKeys.getServerRussianKey),
         new Streebog256,
         protoKeys.getServerMacRussianKey
       )
@@ -72,7 +72,7 @@ final class CryptoHelper(protoKeys: ActorProtoKey) {
       )
 
       val Russia = new CBCHmacBox(
-        new KuznechikCipher(protoKeys.getClientRussianKey),
+        new KuznechikFastEngine(protoKeys.getClientRussianKey),
         new Streebog256,
         protoKeys.getClientMacRussianKey
       )
@@ -128,7 +128,7 @@ final class CryptoHelper(protoKeys: ActorProtoKey) {
   }
 }
 
-private[frontend] final class SessionClient(sessionRegion: SessionRegion)
+private[frontend] final class SessionClient(sessionRegion: SessionRegion, remoteAddr: InetAddress)
   extends Actor
   with ActorLogging
   with ActorPublisher[T.MTProto]
@@ -213,7 +213,7 @@ private[frontend] final class SessionClient(sessionRegion: SessionRegion)
       } else {
         unpack(mbBits) match {
           case Success(rawBits) ⇒
-            sessionRegion.ref ! SessionEnvelope(authId, sessionId).withHandleMessageBox(HandleMessageBox(ByteString.copyFrom(rawBits.toByteBuffer)))
+            sessionRegion.ref ! SessionEnvelope(authId, sessionId).withHandleMessageBox(HandleMessageBox(ByteString.copyFrom(rawBits.toByteBuffer), Some(remoteAddr)))
           case Failure(EncryptedPackageDecodeError) ⇒
             enqueuePackage(Drop(0, 0, "Cannot parse EncryptedPackage"))
             onCompleteThenStop()

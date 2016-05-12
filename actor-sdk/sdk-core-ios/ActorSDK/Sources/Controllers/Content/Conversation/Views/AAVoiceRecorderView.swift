@@ -69,16 +69,16 @@ class AAVoiceRecorderView: UIView {
         
         self.timeLabel.text = "0:00"
         self.timeLabel.font = UIFont.systemFontOfSize(15)
-        self.timeLabel.textColor = UIColor.blackColor()
+        self.timeLabel.textColor = appStyle.vcHintColor
         self.timeLabel.frame = CGRectMake(29, 12, 50, 20)
         
         self.sliderLabel.text = "Slide to cancel"
         self.sliderLabel.font = UIFont.systemFontOfSize(14)
         self.sliderLabel.textAlignment = .Left
         self.sliderLabel.frame = CGRectMake(140,12,100,20)
-        self.sliderLabel.textColor = UIColor(red: 0.7287, green: 0.7252, blue: 0.7322, alpha: 1.0)
+        self.sliderLabel.textColor = appStyle.vcHintColor
         
-        self.sliderArrow.image = UIImage.tinted("aa_recorderarrow", color: UIColor(red: 0.7287, green: 0.7252, blue: 0.7322, alpha: 1.0))
+        self.sliderArrow.image = UIImage.tinted("aa_recorderarrow", color: appStyle.vcHintColor)
         self.sliderArrow.frame = CGRectMake(110,12,20,20)
         
         self.recorderImageCircle.image = UIImage.tinted("aa_recordercircle", color: UIColor(red: 0.7287, green: 0.7252, blue: 0.7322, alpha: 1.0))
@@ -138,7 +138,7 @@ class AAVoiceRecorderView: UIView {
         self.sliderArrow.frame = CGRectMake(310,12,20,20)
         self.recorderImageCircle.frame = CGRectMake(-110, 15, 14, 14)
         
-        UIView.animateWithDuration(0.3, delay: 0.0, usingSpringWithDamping: 0.5, initialSpringVelocity: 1.0, options: UIViewAnimationOptions.CurveLinear, animations: { () -> Void in
+        UIView.animateWithDuration(1.5, delay: 0.0, usingSpringWithDamping: 0.5, initialSpringVelocity: 1.0, options: UIViewAnimationOptions.CurveLinear, animations: { () -> Void in
             
             self.timeLabel.frame = CGRectMake(29, 12, 50, 20)
             self.sliderLabel.frame = CGRectMake(140,12,100,20)
@@ -190,7 +190,7 @@ class AAVoiceRecorderView: UIView {
     func startUpdateTimer() {
         self.meterTimer = NSTimer.scheduledTimerWithTimeInterval(0.1,
             target:self,
-            selector:"updateAudioMeter:",
+            selector:#selector(AAVoiceRecorderView.updateAudioMeter(_:)),
             userInfo:nil,
             repeats:true)
     }

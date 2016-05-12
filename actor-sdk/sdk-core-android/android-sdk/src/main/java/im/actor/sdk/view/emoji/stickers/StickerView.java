@@ -15,10 +15,9 @@ import com.facebook.imagepipeline.request.ImageRequest;
 import com.facebook.imagepipeline.request.ImageRequestBuilder;
 
 import java.io.File;
-import java.io.IOException;
 
 import im.actor.core.entity.FileReference;
-import im.actor.core.entity.content.internal.Sticker;
+import im.actor.core.entity.Sticker;
 import im.actor.core.viewmodel.FileVM;
 import im.actor.core.viewmodel.FileVMCallback;
 import im.actor.runtime.files.FileSystemReference;
@@ -65,7 +64,7 @@ public class StickerView extends SimpleDraweeView {
 
         GenericDraweeHierarchy hierarchy = builder
                 .setFadeDuration(200)
-                .setActualImageScaleType(ScalingUtils.ScaleType.CENTER_INSIDE)
+                .setActualImageScaleType(ScalingUtils.ScaleType.FIT_CENTER)
                 .build();
         setHierarchy(hierarchy);
 
@@ -73,21 +72,8 @@ public class StickerView extends SimpleDraweeView {
 
     }
 
-    public void bind(final Sticker sticker, int size) {
-        this.sticker = sticker;
-        FileReference fileReference;
-        switch (size) {
-            default:
-            case STICKER_FULL:
-                fileReference = sticker.getFileReference512();
-                break;
-            case STICKER_BIG:
-                fileReference = sticker.getFileReference256();
-                break;
-            case STICKER_SMALL:
-                fileReference = sticker.getFileReference128();
-                break;
-        }
+    public void bind(FileReference fileReference, int size) {
+
         if (this.fileReference != null && this.fileReference.equals(fileReference)) {
             return;
         }
@@ -108,11 +94,12 @@ public class StickerView extends SimpleDraweeView {
             private void checkFastThumb() {
                 if (!isFastThumbLoaded) {
                     isFastThumbLoaded = true;
-                    if (sticker.getThumb() != null) {
-                        fastThumbLoader.request(sticker.getThumb());
-                    }
+//                    if (sticker.getThumb() != null) {
+//                        fastThumbLoader.request(sticker.getThumb());
+//                    }
                 }
             }
+
             @Override
             public void onNotDownloaded() {
                 checkFastThumb();

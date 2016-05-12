@@ -2,30 +2,80 @@
  * Copyright (C) 2015-2016 Actor LLC. <https://actor.im>
  */
 
+import { isFunction } from 'lodash';
 import React, { Component, PropTypes } from 'react';
+import { FormattedMessage } from 'react-intl';
+
+import DefaultTyping from './TypingSection.react';
+import DefaultCompose from './ComposeSection.react';
 
 class DialogFooter extends Component {
-  static propTypes = {
-    isMember: PropTypes.bool.isRequired,
-    components: PropTypes.shape({
-      TypingSection: React.PropTypes.func.isRequired,
-      ComposeSection: React.PropTypes.func.isRequired
-    }).isRequired
+  static contextTypes = {
+    delegate: PropTypes.object.isRequired
   };
 
+  static propTypes = {
+    info: PropTypes.object.isRequired,
+    isMember: PropTypes.bool.isRequired,
+    onUnblock: PropTypes.func.isRequired,
+    onStart: PropTypes.func.isRequired
+  };
+
+  static defaultProps = {
+    isBlocked: false
+  };
+
+  constructor(props, context) {
+    super(props, context);
+
+    const { dialog } = context.delegate.components;
+    if (dialog && !isFunction(dialog)) {
+      this.components = {
+        TypingSection: dialog.typing || DefaultTyping,
+        ComposeSection: dialog.compose || DefaultCompose
+      };
+    } else {
+      this.components = {
+        TypingSection: DefaultTyping,
+        ComposeSection: DefaultCompose
+      };
+    }
+  }
+
   render() {
-    if (!this.props.isMember) {
+    const { info, isMember, onUnblock, onStart } = this.props;
+    if (!isMember) {
       return (
-        <footer className="dialog__footer dialog__footer--disabled row center-xs middle-xs">
-          <h3>You are not a member</h3>
+        <footer className="chat__footer chat__footer--disabled">
+          <FormattedMessage id="compose.notMember" />
         </footer>
       );
     }
 
-    const {TypingSection, ComposeSection} = this.props.components;
+    if (info.isBlocked) {
+      return (
+        <footer className="chat__footer chat__footer--disabled">
+          <button className="button button--flat" onClick={onUnblock}>
+            <FormattedMessage id="compose.unblock" />
+          </button>
+        </footer>
+      );
+    }
+
+    if (info.isBot && !info.isStarted) {
+      return (
+        <footer className="chat__footer chat__footer--disabled">
+          <button className="button button--flat" onClick={onStart}>
+            <FormattedMessage id="compose.start" />
+          </button>
+        </footer>
+      );
+    }
+
+    const { TypingSection, ComposeSection } = this.components;
 
     return (
-      <footer className="dialog__footer">
+      <footer className="chat__footer">
         <TypingSection />
         <ComposeSection />
       </footer>

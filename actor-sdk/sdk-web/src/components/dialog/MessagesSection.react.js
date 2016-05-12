@@ -2,117 +2,67 @@
  * Copyright (C) 2015-2016 Actor LLC. <https://actor.im>
  */
 
-import { forEach, map, debounce, isFunction } from 'lodash';
-
 import React, { Component, PropTypes } from 'react';
 import { Container } from 'flux/utils';
-import Scrollbar from '../common/Scrollbar.react';
 
+import DialogActionCreators from '../../actions/DialogActionCreators';
 import MessageActionCreators from '../../actions/MessageActionCreators';
 
-import VisibilityStore from '../../stores/VisibilityStore';
-import DialogStore from '../../stores/DialogStore';
 import MessageStore from '../../stores/MessageStore';
 
-import DefaultMessageItem from './messages/MessageItem.react';
 import MessagesList from './MessagesList.react';
-
-
-let _delayed = [];
-let flushDelayed = () => {
-  forEach(_delayed, (p) => MessageActionCreators.setMessageShown(p.peer, p.message));
-  _delayed = [];
-};
-
-let flushDelayedDebounced = debounce(flushDelayed, 30, {maxWait: 100});
 
 class MessagesSection extends Component {
   static propTypes = {
-    messages: PropTypes.array.isRequired,
-    overlay: PropTypes.array.isRequired,
+    uid: PropTypes.number.isRequired,
     peer: PropTypes.object.isRequired,
-    isMember: PropTypes.bool.isRequired,
-    onScroll: PropTypes.func.isRequired
-  };
-
-  static contextTypes = {
-    delegate: PropTypes.object
+    isMember: PropTypes.bool.isRequired
   };
 
   static getStores() {
-    return [MessageStore, VisibilityStore]
+    return [MessageStore];
   }
 
   static calculateState() {
-    return {
-      selectedMessages: MessageStore.getSelected(),
-      isAllMessagesLoaded: MessageStore.isLoaded(),
-      isAppVisible: VisibilityStore.isAppVisible()
-    }
+    return MessageStore.getState();
   }
 
-  componentDidUpdate() {
-    const { isAppVisible } = this.state;
-    if (isAppVisible) {
-      flushDelayed();
-    }
-  };
+  constructor(props) {
+    super(props);
 
-  onMessageSelect = (rid) => {
-    const { selectedMessages } = this.state;
-    if (selectedMessages.has(rid)) {
-      MessageActionCreators.setSelected(selectedMessages.remove(rid));
-    } else {
-      MessageActionCreators.setSelected(selectedMessages.add(rid));
-    }
-  };
+    this.onEdit = this.onEdit.bind(this);
+    this.onSelect = this.onSelect.bind(this);
+    this.onLoadMore = this.onLoadMore.bind(this);
+  }
 
-  onMessageVisibilityChange = (message, isVisible) => {
+  onEdit(message, text) {
     const { peer } = this.props;
+    MessageActionCreators.endEdit(peer, message, text);
+  }
 
-    if (isVisible) {
-      _delayed.push({peer, message});
-      if (VisibilityStore.isAppVisible()) {
-        flushDelayedDebounced();
-      }
-    }
-  };
+  onSelect(rid) {
+    MessageActionCreators.toggleSelected(rid);
+  }
 
-  getComponents() {
-    const {dialog, messages} = this.context.delegate.components;
-    if (dialog && dialog.messages && isFunction(dialog.messages.message)) {
-      return {
-        MessageItem: dialog.messages.message
-      };
-    }
-
-    return {
-      MessageItem: DefaultMessageItem
-    };
+  onLoadMore() {
+    DialogActionCreators.loadMoreMessages(this.props.peer);
   }
 
   render() {
-    const { peer, overlay, messages, isMember } = this.props;
-    const { selectedMessages, isAllMessagesLoaded } = this.state;
-
-    const components = this.getComponents();
+    const { uid, peer, isMember } = this.props;
 
     return (
-      <Scrollbar onScroll={this.props.onScroll} ref="messagesScroll">
-        <MessagesList
-          peer={peer}
-          overlay={overlay}
-          messages={messages}
-          selectedMessages={selectedMessages}
-          isMember={isMember}
-          isAllMessagesLoaded={isAllMessagesLoaded}
-          components={components}
-          onSelect={this.onMessageSelect}
-          onVisibilityChange={this.onMessageVisibilityChange}
-        />
-      </Scrollbar>
+      <MessagesList
+        uid={uid}
+        peer={peer}
+        messages={this.state}
+        isMember={isMember}
+        onSelect={this.onSelect}
+        onLoadMore={this.onLoadMore}
+        onEdit={this.onEdit}
+      />
     );
   }
 }
 
-export default Container.create(MessagesSection, {pure: false, withProps: true});
+export default Container.create(MessagesSection);

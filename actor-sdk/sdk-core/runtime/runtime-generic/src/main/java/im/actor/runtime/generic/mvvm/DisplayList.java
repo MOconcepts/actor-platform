@@ -4,6 +4,7 @@
 
 package im.actor.runtime.generic.mvvm;
 
+import com.google.j2objc.annotations.AutoreleasePool;
 import com.google.j2objc.annotations.ObjectiveCName;
 
 import java.util.ArrayList;
@@ -20,7 +21,17 @@ import im.actor.runtime.generic.mvvm.alg.Modifications;
 
 import static im.actor.runtime.actors.ActorSystem.system;
 
+// Disabling Bounds checks for speeding up calculations
+
+/*-[
+#define J2OBJC_DISABLE_ARRAY_BOUND_CHECKS 1
+]-*/
+
 public class DisplayList<T> {
+
+    static {
+        system().addDispatcher("display_list");
+    }
 
     private static int NEXT_ID = 0;
     private final int DISPLAY_LIST_ID;
@@ -30,11 +41,9 @@ public class DisplayList<T> {
     private final OperationMode operationMode;
     private volatile Object processedList;
 
-    private CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<Listener>();
-    private CopyOnWriteArrayList<AndroidChangeListener<T>> androidListeners =
-            new CopyOnWriteArrayList<AndroidChangeListener<T>>();
-    private CopyOnWriteArrayList<AppleChangeListener<T>> appleListeners =
-            new CopyOnWriteArrayList<AppleChangeListener<T>>();
+    private CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
+    private CopyOnWriteArrayList<AndroidChangeListener<T>> androidListeners = new CopyOnWriteArrayList<>();
+    private CopyOnWriteArrayList<AppleChangeListener<T>> appleListeners = new CopyOnWriteArrayList<>();
 
     private ListProcessor<T> listProcessor = null;
 
@@ -74,6 +83,16 @@ public class DisplayList<T> {
     public T getItem(int index) {
         // im.actor.runtime.Runtime.checkMainThread();
         return lists[currentList].get(index);
+    }
+
+    @ObjectiveCName("positionWithFind:")
+    public int getPosition(Object find) {
+        for (int i = 0; i < lists[currentList].size(); i++) {
+            if (lists[currentList].get(i).equals(find)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     @ObjectiveCName("editList:")
@@ -185,6 +204,7 @@ public class DisplayList<T> {
             this.displayList = displayList;
         }
 
+        @AutoreleasePool
         public void onEditList(final Modification<T> modification, final Runnable runnable, boolean isLoadMore) {
 
             if (modification != null) {
@@ -243,6 +263,7 @@ public class DisplayList<T> {
                     processedList);
         }
 
+        @AutoreleasePool
         private void requestListSwitch(final ModificationHolder<T>[] modifications,
                                        final ArrayList<T> initialList,
                                        final ArrayList<ChangeDescription<T>> androidChanges,
@@ -284,6 +305,7 @@ public class DisplayList<T> {
             });
         }
 
+        @AutoreleasePool
         public void onListSwitched(ModificationHolder<T>[] modifications) {
             isLocked = false;
 
@@ -305,7 +327,7 @@ public class DisplayList<T> {
                 onEditList(((EditList<T>) message).modification, ((EditList) message).executeAfter,
                         ((EditList) message).isLoadMore);
             } else {
-                drop(message);
+                super.onReceive(message);
             }
         }
     }

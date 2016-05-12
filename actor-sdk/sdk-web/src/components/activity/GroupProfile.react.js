@@ -2,10 +2,9 @@
  * Copyright (C) 2015-2016 Actor LLC. <https://actor.im>
  */
 
-import { assign } from 'lodash';
 import React, { Component, PropTypes } from 'react';
-import { FormattedMessage } from 'react-intl';
 import classnames from 'classnames';
+import { FormattedMessage } from 'react-intl';
 import { lightbox } from '../../utils/ImageUtils';
 import { Container } from 'flux/utils';
 import Scrollbar from '../common/Scrollbar.react';
@@ -26,6 +25,7 @@ import GroupStore from '../../stores/GroupStore';
 import UserStore from '../../stores/UserStore';
 import OnlineStore from '../../stores/OnlineStore';
 
+import SvgIcon from '../common/SvgIcon.react';
 import AvatarItem from '../common/AvatarItem.react';
 import GroupProfileMembers from '../activity/GroupProfileMembers.react';
 import Fold from '../common/Fold.react';
@@ -33,18 +33,11 @@ import ToggleNotifications from '../common/ToggleNotifications.react';
 
 const MAX_GROUP_CALL_SIZE = 25;
 
-const getStateFromStores = (gid) => {
-  const thisPeer = gid ? GroupStore.getGroup(gid) : null;
-  return {
-    thisPeer,
-    // should not require to pass a peer
-    isNotificationsEnabled: thisPeer ? NotificationsStore.isNotificationsEnabled(thisPeer) : true,
-    integrationToken: GroupStore.getToken(),
-    message: OnlineStore.getMessage()
-  };
-};
-
 class GroupProfile extends Component {
+  static contextTypes = {
+    intl: PropTypes.object
+  };
+
   static propTypes = {
     group: PropTypes.object.isRequired
   };
@@ -54,12 +47,16 @@ class GroupProfile extends Component {
   }
 
   static calculateState(prevState, nextProps) {
-    return getStateFromStores(nextProps.group.id || null);
+    const gid = nextProps.group.id;
+    const peer = gid ? GroupStore.getGroup(gid) : null;
+    return {
+      peer,
+      // should not require to pass a peer
+      isNotificationsEnabled: peer ? NotificationsStore.isNotificationsEnabled(peer) : true,
+      integrationToken: GroupStore.getToken(),
+      message: OnlineStore.getMessage()
+    };
   }
-
-  static contextTypes = {
-    intl: PropTypes.object
-  };
 
   constructor(props) {
     super(props);
@@ -71,17 +68,9 @@ class GroupProfile extends Component {
 
   onAddMemberClick = group => InviteUserActions.show(group);
 
-  onLeaveGroupClick = gid => {
-    const { intl } = this.context;
-    confirm(intl.messages['modal.confirm.leave']).then(
-      () => DialogActionCreators.leaveGroup(gid),
-      () => {}
-    );
-  };
-
   onNotificationChange = event => {
-    const { thisPeer } = this.state;
-    NotificationsActionCreators.changeNotificationsEnabled(thisPeer, event.target.checked);
+    const { peer } = this.state;
+    NotificationsActionCreators.changeNotificationsEnabled(peer, event.target.checked);
   };
 
   selectToken = (event) => event.target.select();
@@ -90,7 +79,7 @@ class GroupProfile extends Component {
     const { isMoreDropdownOpen } = this.state;
 
     if (!isMoreDropdownOpen) {
-      this.setState({isMoreDropdownOpen: true});
+      this.setState({ isMoreDropdownOpen: true });
       document.addEventListener('click', this.closeMoreDropdown, false);
     } else {
       this.closeMoreDropdown();
@@ -98,13 +87,16 @@ class GroupProfile extends Component {
   };
 
   closeMoreDropdown = () => {
-    this.setState({isMoreDropdownOpen: false});
+    this.setState({ isMoreDropdownOpen: false });
     document.removeEventListener('click', this.closeMoreDropdown, false);
   };
 
   onClearGroupClick = (gid) => {
-    const { intl } = this.context;
-    confirm(intl.messages['modal.confirm.clear']).then(
+    const { group } = this.props;
+
+    confirm(
+      <FormattedMessage id="modal.confirm.group.clear" values={{ name: group.name }} />
+    ).then(
       () => {
         const peer = ActorClient.getGroupPeer(gid);
         DialogActionCreators.clearChat(peer)
@@ -113,9 +105,23 @@ class GroupProfile extends Component {
     );
   };
 
+  onLeaveGroupClick = gid => {
+    const { group } = this.props;
+
+    confirm(
+      <FormattedMessage id="modal.confirm.group.leave" values={{ name: group.name }} />
+    ).then(
+      () => DialogActionCreators.leaveGroup(gid),
+      () => {}
+    );
+  };
+
   onDeleteGroupClick = (gid) => {
-    const { intl } = this.context;
-    confirm(intl.messages['modal.confirm.delete']).then(
+    const { group } = this.props;
+
+    confirm(
+      <FormattedMessage id="modal.confirm.group.delete" values={{ name: group.name }} />
+    ).then(
       () => {
         const peer = ActorClient.getGroupPeer(gid);
         DialogActionCreators.deleteChat(peer);
@@ -152,29 +158,30 @@ class GroupProfile extends Component {
     });
 
     const iconElement = (
-      <svg className="icon icon--green"
-           dangerouslySetInnerHTML={{__html: '<use xlink:href="assets/images/icons.svg#members"/>'}}/>
+      <SvgIcon className="icon icon--green" glyph="members" />
     );
 
     const groupMeta = [
       <header key={1}>
-        <AvatarItem image={group.bigAvatar}
-                    placeholder={group.placeholder}
-                    size="large"
-                    title={group.name}
-                    onClick={this.handleAvatarClick}/>
-
-        <h3 className="group_profile__meta__title" dangerouslySetInnerHTML={{__html: escapeWithEmoji(group.name)}}/>
+        <AvatarItem
+          className="profile__avatar"
+          size="large"
+          image={group.bigAvatar}
+          placeholder={group.placeholder}
+          title={group.name}
+          onClick={this.handleAvatarClick}
+        />
+        <h3 className="group_profile__meta__title" dangerouslySetInnerHTML={{ __html: escapeWithEmoji(group.name) }}/>
         <div className="group_profile__meta__created">
           {intl.messages['createdBy']}
           &nbsp;
-          <span dangerouslySetInnerHTML={{__html: escapeWithEmoji(admin.name)}}/>
+          <span dangerouslySetInnerHTML={{ __html: escapeWithEmoji(admin.name) }}/>
         </div>
       </header>
     ,
       group.about ? (
         <div className="group_profile__meta__description" key={2}
-             dangerouslySetInnerHTML={{__html: escapeWithEmoji(group.about).replace(/\n/g, '<br/>')}}/>
+             dangerouslySetInnerHTML={{ __html: escapeWithEmoji(group.about).replace(/\n/g, '<br/>') }}/>
       ) : null
     ];
 
@@ -212,7 +219,7 @@ class GroupProfile extends Component {
                           </button>
                     }
                   </div>
-                  <div style={{width: 10}}/>
+                  <div style={{ width: 10 }}/>
                   <div className="col-xs">
                     <div className={dropdownClassNames}>
                       <button className="dropdown__button button button--flat button--wide"
@@ -251,23 +258,12 @@ class GroupProfile extends Component {
                 </footer>
               </li>
 
-              <li className="profile__list__item group_profile__media no-p hide">
-                <Fold icon="attach_file" iconClassName="icon--gray" title={intl.messages['sharedMedia']}>
-                  <ul>
-                    <li><a>230 Shared Photos and Videos</a></li>
-                    <li><a>49 Shared Links</a></li>
-                    <li><a>49 Shared Files</a></li>
-                  </ul>
-                </Fold>
-              </li>
-
               <li className="profile__list__item group_profile__notifications no-p">
                 <ToggleNotifications isNotificationsEnabled={isNotificationsEnabled} onNotificationChange={this.onNotificationChange}/>
               </li>
 
               <li className="profile__list__item group_profile__members no-p">
-                <Fold iconElement={iconElement}
-                      title={message}>
+                <Fold iconElement={iconElement} title={message}>
                   <GroupProfileMembers groupId={group.id} members={group.members}/>
                 </Fold>
               </li>
@@ -292,4 +288,4 @@ class GroupProfile extends Component {
   }
 }
 
-export default Container.create(GroupProfile, {pure:false, withProps: true});
+export default Container.create(GroupProfile, { pure:false, withProps: true });

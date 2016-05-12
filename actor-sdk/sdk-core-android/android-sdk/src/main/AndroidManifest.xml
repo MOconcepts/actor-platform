@@ -48,13 +48,13 @@
         <!-- Auth -->
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.auth.AuthActivity"
+            android:name=".controllers.auth.AuthActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.auth.PickCountryActivity"
+            android:name=".controllers.auth.PickCountryActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustResize" />
@@ -83,12 +83,16 @@
                     android:host="quit.email"
                     android:pathPrefix="/join/"
                     android:scheme="https" />
-                <data android:scheme="actor" />
+                <data
+                    android:host="app.actor.im"
+                    android:pathPrefix="/#/join/"
+                    android:scheme="https" />
             </intent-filter>
 
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="actor" />
             </intent-filter>
 
@@ -119,7 +123,7 @@
         <!-- Profiles -->
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.profile.ProfileActivity"
+            android:name=".controllers.profile.ProfileActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/ProfileActivityTheme"
             android:windowSoftInputMode="adjustNothing|stateAlwaysHidden">
@@ -127,13 +131,13 @@
         </activity>
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.group.GroupInfoActivity"
+            android:name=".controllers.group.GroupInfoActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/ProfileActivityTheme"
             android:windowSoftInputMode="adjustNothing|stateAlwaysHidden" />
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.settings.MyProfileActivity"
+            android:name=".controllers.settings.MyProfileActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/ProfileActivityTheme"
             android:windowSoftInputMode="adjustNothing|stateAlwaysHidden" />
@@ -141,31 +145,31 @@
         <!-- Compose -->
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.compose.ComposeActivity"
+            android:name=".controllers.compose.ComposeActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.group.AddMemberActivity"
+            android:name=".controllers.group.AddMemberActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.group.InviteLinkActivity"
+            android:name=".controllers.group.InviteLinkActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.group.IntegrationTokenActivity"
+            android:name=".controllers.contacts.InviteActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.compose.CreateGroupActivity"
+            android:name=".controllers.compose.CreateGroupActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustResize|stateVisible" />
@@ -173,13 +177,13 @@
         <!-- Settings -->
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.settings.NotificationsActivity"
+            android:name=".controllers.settings.NotificationsActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustNothing|stateAlwaysHidden" />
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.settings.ChatSettingsActivity"
+            android:name=".controllers.settings.ChatSettingsActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustNothing|stateAlwaysHidden" />
@@ -191,7 +195,13 @@
             android:windowSoftInputMode="adjustNothing|stateAlwaysHidden" />
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.settings.SecuritySettingsActivity"
+            android:name=".controllers.settings.SecuritySettingsActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+            android:theme="@style/CommonActivityTheme"
+            android:windowSoftInputMode="adjustNothing|stateAlwaysHidden" />
+
+        <activity
+            android:name=".controllers.settings.BlockedListActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustNothing|stateAlwaysHidden" />
@@ -225,19 +235,19 @@
 
         <!-- Actions -->
         <activity
-            android:name="im.actor.sdk.controllers.fragment.settings.EditNameActivity"
+            android:name=".controllers.settings.EditNameActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustResize|stateAlwaysVisible" />
 
         <activity
-            android:name=".controllers.fragment.settings.PickWallpaperActivity"
+            android:name=".controllers.settings.PickWallpaperActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
-            android:name="im.actor.sdk.controllers.fragment.settings.EditAboutActivity"
+            android:name=".controllers.settings.EditAboutActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
             android:windowSoftInputMode="adjustResize|stateAlwaysVisible" />
@@ -262,16 +272,28 @@
             android:label="@string/picker_file_activity_title"
             android:theme="@style/PickerTheme.FilePicker" />
 
-        <activity
-            android:name=".controllers.pickers.map.MapPickerActivity"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
-            android:theme="@style/PickerTheme.FilePicker" />
 
         <activity
-            android:name=".controllers.conversation.messages.MapActivity"
+            android:name="im.actor.map.MapPickerActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+            android:theme="@style/CommonActivityTheme">
+            <intent-filter>
+                <category android:name="android.intent.category.DEFAULT" />
+                <action android:name="im.actor.pickLocation_${applicationId}" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name="im.actor.map.MapActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:theme="@style/CommonActivityTheme"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <category android:name="android.intent.category.DEFAULT" />
+                <action android:name="im.actor.locationPreview_${applicationId}" />
+            </intent-filter>
+        </activity>
+
 
         <activity
             android:name=".controllers.activity.ShortcutActivity"
@@ -300,6 +322,10 @@
             android:enabled="true"
             android:exported="true"
             android:process=":actor_push" />
+
+        <receiver
+            android:name=".receivers.ChromeCustomTabReceiver"
+            android:enabled="true" />
 
         <receiver
             android:name="im.actor.sdk.receivers.SDKPushReceiver"

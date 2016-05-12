@@ -6,11 +6,17 @@ import Foundation
 
 class CocoaDispatcher: NSObject, ARCocoaDispatcherProxy {
     
-    private let queue = YYDispatchQueueGetForQOS(NSQualityOfService.Background)
-    
-    func dispatchOnBackgroundWithJavaLangRunnable(runnable: JavaLangRunnable!, withLong delay: jlong) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, Int64(Double(delay) * Double(NSEC_PER_MSEC))), queue) {
+    func dispatchOnBackground(runnable: JavaLangRunnable!, withDelay delay: jlong) -> ARDispatchCancel! {
+        dispatchBackgroundDelayed(Double(delay) / 1000) { () -> Void in
             runnable.run()
         }
+        return DispatchCancel()
+    }
+}
+
+private class DispatchCancel: NSObject, ARDispatchCancel {
+    
+    @objc private func cancel() {
+        // Do Nothing
     }
 }

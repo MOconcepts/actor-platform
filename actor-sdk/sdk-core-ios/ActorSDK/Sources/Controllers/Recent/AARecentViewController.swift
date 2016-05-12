@@ -30,24 +30,12 @@ public class AARecentViewController: AADialogsListContentController, AADialogsLi
         
         tabBarItem = UITabBarItem(title: "TabMessages", img: "TabIconChats", selImage: "TabIconChatsHighlighted")
         
-        binder.bind(Actor.getAppState().globalCounter, closure: { (value: JavaLangInteger?) -> () in
-            if value != nil {
-                if value!.integerValue > 0 {
-                    self.tabBarItem.badgeValue = "\(value!.integerValue)"
-                } else {
-                    self.tabBarItem.badgeValue = nil
-                }
-            } else {
-                self.tabBarItem.badgeValue = nil
-            }
-        })
-        
         // Setting navigation item
         
         navigationItem.title = AALocalized("TabMessages")
         navigationItem.leftBarButtonItem = editButtonItem()
         navigationItem.leftBarButtonItem!.title = AALocalized("NavigationEdit")
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: UIBarButtonSystemItem.Compose, target: self, action: "compose")
+        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: UIBarButtonSystemItem.Compose, target: self, action: #selector(AARecentViewController.compose))
     }
     
     // Implemention of editing
@@ -66,13 +54,13 @@ public class AARecentViewController: AADialogsListContentController, AADialogsLi
             self.navigationItem.leftBarButtonItem!.title = AALocalized("NavigationEdit")
             self.navigationItem.leftBarButtonItem!.style = UIBarButtonItemStyle.Plain
             
-            navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: UIBarButtonSystemItem.Compose, target: self, action: "compose")
+            navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: UIBarButtonSystemItem.Compose, target: self, action: #selector(AARecentViewController.compose))
         }
         
         if editing == true {
             navigationItem.rightBarButtonItem = nil
         } else {
-            navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: UIBarButtonSystemItem.Compose, target: self, action: "compose")
+            navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: UIBarButtonSystemItem.Compose, target: self, action: #selector(AARecentViewController.compose))
         }
     }
     
@@ -85,6 +73,22 @@ public class AARecentViewController: AADialogsListContentController, AADialogsLi
     }
     
     // Tracking app state
+    
+    public override func viewWillAppear(animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        binder.bind(Actor.getGlobalState().globalCounter, closure: { (value: JavaLangInteger?) -> () in
+            if value != nil {
+                if value!.integerValue > 0 {
+                    self.tabBarItem.badgeValue = "\(value!.integerValue)"
+                } else {
+                    self.tabBarItem.badgeValue = nil
+                }
+            } else {
+                self.tabBarItem.badgeValue = nil
+            }
+        })
+    }
     
     public override func viewDidAppear(animated: Bool) {
         super.viewDidAppear(animated)

@@ -12,7 +12,7 @@ class ArchiveStore extends Store {
 
     this.isLoading = true;
     this.dialogs = [];
-    this.archiveChatState = [];
+    this.archiveChatState = {};
     this._isAllLoaded = false;
     this._isInitialLoadingComplete = false;
   }
@@ -33,26 +33,23 @@ class ArchiveStore extends Store {
     return this.dialogs;
   }
 
-  getArchiveChatState(id) {
-    return (this.archiveChatState[id] || AsyncActionStates.PENDING);
+  getArchiveChatState() {
+    return this.archiveChatState;
   }
 
-  resetArchiveChatState(id) {
-    delete this.archiveChatState[id];
-  }
 
   __onDispatch(action) {
     switch(action.type) {
       case ActionTypes.ARCHIVE_ADD:
-        this.archiveChatState[action.peer.id] = AsyncActionStates.PROCESSING;
+        this.archiveChatState[action.peer.key] = AsyncActionStates.PROCESSING;
         this.__emitChange();
         break;
       case ActionTypes.ARCHIVE_ADD_SUCCESS:
-        this.resetArchiveChatState(action.peer.id);
+        delete this.archiveChatState[action.peer.key];
         this.__emitChange();
         break;
       case ActionTypes.ARCHIVE_ADD_ERROR:
-        this.archiveChatState[action.peer.id] = AsyncActionStates.FAILURE;
+        this.archiveChatState[action.peer.key] = AsyncActionStates.FAILURE;
         this.__emitChange();
         break;
 

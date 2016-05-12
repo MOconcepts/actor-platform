@@ -66,6 +66,31 @@ public class AABubbleBaseFileCell: AABubbleCell {
             } else {
                 fatalError("Unsupported file source")
             }
+        } else if let sticker = message.content as? ACStickerContent {
+            
+            let file = sticker.image256
+            
+            let selfGeneration = prepareBind()
+            
+            bindedDownloadFile = file.reference.getFileId()
+            bindedDownloadCallback = AAFileCallback(notDownloaded: { () -> () in
+                if (self.bindGeneration != selfGeneration) {
+                    return
+                }
+                self.fileDownloadPaused(selfGeneration)
+                }, onDownloading: { (progress) -> () in
+                    if (self.bindGeneration != selfGeneration) {
+                        return
+                    }
+                    self.fileDownloading(progress, selfGeneration: selfGeneration)
+                }, onDownloaded: { (reference) -> () in
+                    if (self.bindGeneration != selfGeneration) {
+                        return
+                    }
+                    self.fileReady(reference, selfGeneration: selfGeneration)
+            })
+            
+            Actor.bindRawFileWithReference(ACFileReference(ARApiFileLocation: file.reference.getFileLocation(), withNSString: file.reference.fileName, withInt: file.reference.fileSize), autoStart: autoDownload, withCallback: bindedDownloadCallback)
         } else {
             fatalError("Unsupported message type")
         }
@@ -99,7 +124,7 @@ public class AABubbleBaseFileCell: AABubbleCell {
     private func prepareBind() -> Int {
         
         // Next generation of binding
-        bindGeneration++
+        bindGeneration += 1
         // Saving generation to new binding
         let selfGeneration = bindGeneration;
         

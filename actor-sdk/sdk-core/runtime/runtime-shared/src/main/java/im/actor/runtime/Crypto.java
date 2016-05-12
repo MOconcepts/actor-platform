@@ -4,12 +4,10 @@
 
 package im.actor.runtime;
 
-import java.math.BigInteger;
-
+import im.actor.runtime.crypto.BlockCipher;
+import im.actor.runtime.crypto.Digest;
 import im.actor.runtime.crypto.primitives.digest.KeyDigest;
 import im.actor.runtime.crypto.primitives.digest.MD5;
-import im.actor.runtime.crypto.primitives.digest.MD5Digest;
-import im.actor.runtime.crypto.primitives.digest.SHA256;
 import im.actor.runtime.util.Hex;
 
 public class Crypto {
@@ -22,6 +20,14 @@ public class Crypto {
 
     public static void waitForCryptoLoaded() {
         runtime.waitForCryptoLoaded();
+    }
+
+    public static Digest createSHA256() {
+        return runtime.SHA256();
+    }
+
+    public static BlockCipher createAES128(byte[] key) {
+        return runtime.AES128(key);
     }
 
     public static byte[] MD5(byte[] data) {
@@ -47,8 +53,7 @@ public class Crypto {
      * @return SHA256 of data
      */
     public static byte[] SHA256(byte[] data) {
-        SHA256 sha256 = new SHA256();
-        sha256.reset();
+        Digest sha256 = createSHA256();
         sha256.update(data, 0, data.length);
         byte[] res = new byte[32];
         sha256.doFinal(res, 0);
@@ -79,14 +84,6 @@ public class Crypto {
         random.nextBytes(data);
     }
 
-    public static BigInteger generateBigInteger(int numBits) {
-        return random.generateBigInteger(numBits);
-    }
-
-    public static BigInteger generateBigInteger(int numBits, int certanity) {
-        return random.generateBigInteger(numBits, certanity);
-    }
-
     /**
      * Calculating lowcase hex string
      *
@@ -94,31 +91,10 @@ public class Crypto {
      * @return hex string
      */
     public static String hex(byte[] bytes) {
-        char[] hexChars = new char[bytes.length * 2];
-        for (int j = 0; j < bytes.length; j++) {
-            int v = bytes[j] & 0xFF;
-            hexChars[j * 2] = hexArray[v >>> 4];
-            hexChars[j * 2 + 1] = hexArray[v & 0x0F];
-        }
-        return new String(hexChars);
-    }
-
-    private static int fromHexShort(char a) {
-        if (a >= '0' && a <= '9') {
-            return a - '0';
-        }
-        if (a >= 'a' && a <= 'f') {
-            return 10 + (a - 'a');
-        }
-
-        throw new RuntimeException();
+        return Hex.hex(bytes);
     }
 
     public static byte[] fromHex(String hex) {
-        byte[] res = new byte[hex.length() / 2];
-        for (int i = 0; i < res.length; i++) {
-            res[i] = (byte) ((fromHexShort(hex.charAt(i * 2)) << 4) + fromHexShort(hex.charAt(i * 2 + 1)));
-        }
-        return res;
+        return Hex.fromHex(hex);
     }
 }

@@ -2,6 +2,7 @@ package im.actor.bots
 
 import derive.key
 import upickle.Js
+import upickle.Js.Obj
 import upickle.default._
 
 import scala.annotation.meta.beanGetter
@@ -52,6 +53,12 @@ object BotMessages {
     @beanGetter fullImage:  Option[AvatarImage]
   )
 
+  final case class BotCommand(
+    @beanGetter slashCommand: String,
+    @beanGetter description:  String,
+    locKey:                   Option[String]
+  ) { def getLocKey = locKey.asJava }
+
   final case class ContactInfo(
     phones: Seq[Long],
     emails: Seq[String]
@@ -76,7 +83,8 @@ object BotMessages {
     isBot:                  Option[Boolean],
     contactRecords:         Seq[ContactRecord],
     timeZone:               Option[String],
-    preferredLanguages:     Seq[String]
+    preferredLanguages:     Seq[String],
+    botCommands:            Seq[BotCommand]
   ) {
     def isMale = sex.contains(1)
 
@@ -107,6 +115,8 @@ object BotMessages {
     def getTimeZone = timeZone.asJava
 
     def getPreferredLanguages = seqAsJavaList(preferredLanguages)
+
+    def getBotCommands = seqAsJavaList(botCommands)
   }
 
   final case class GroupMember(
@@ -270,7 +280,7 @@ object BotMessages {
 
   trait Void extends ResponseBody
 
-  final case object Void extends Void
+  case object Void extends Void
 
   implicit val voidReader = upickle.default.Reader[Void] {
     case Js.Obj() ⇒ Void
@@ -381,7 +391,7 @@ object BotMessages {
   }
 
   @key("GetHooks")
-  final case object GetHooks extends GetHooks
+  case object GetHooks extends GetHooks
 
   @key("ChangeUserAvatar")
   final case class ChangeUserAvatar(
@@ -427,6 +437,66 @@ object BotMessages {
     override def readResponse(obj: Js.Obj) = readJs[Response](obj)
 
     def getAbout = about.asJava
+  }
+
+  @key("AddSlashCommand")
+  final case class AddSlashCommand(
+    @beanGetter userId:  Int,
+    @beanGetter command: BotCommand
+  ) extends RequestBody {
+    override type Response = Void
+    override val service = Services.Users
+
+    override def readResponse(obj: Js.Obj) = readJs[Response](obj)
+  }
+
+  @key("RemoveSlashCommand")
+  final case class RemoveSlashCommand(
+    @beanGetter userId:       Int,
+    @beanGetter slashCommand: String
+  ) extends RequestBody {
+    override type Response = Void
+    override val service = Services.Users
+
+    override def readResponse(obj: Js.Obj) = readJs[Response](obj)
+  }
+
+  @key("AddUserExtString")
+  final case class AddUserExtString(
+    @beanGetter userId: Int,
+    @beanGetter key:    String,
+    @beanGetter value:  String
+  ) extends RequestBody {
+    override type Response = Void
+
+    override def readResponse(obj: Obj) = readJs[Response](obj)
+
+    override val service: String = Services.Users
+  }
+
+  @key("AddUserExtBool")
+  final case class AddUserExtBool(
+    @beanGetter userId: Int,
+    @beanGetter key:    String,
+    @beanGetter value:  Boolean
+  ) extends RequestBody {
+    override type Response = Void
+
+    override def readResponse(obj: Obj) = readJs[Response](obj)
+
+    override val service: String = Services.Users
+  }
+
+  @key("RemoveUserExt")
+  final case class RemoveUserExt(
+    @beanGetter userId: Int,
+    @beanGetter key:    String
+  ) extends RequestBody {
+    override type Response = Void
+
+    override def readResponse(obj: Obj) = readJs[Response](obj)
+
+    override val service: String = Services.Users
   }
 
   @key("IsAdmin")
@@ -639,6 +709,9 @@ object BotMessages {
   }
 
   sealed trait TextMessageEx
+
+  @key("TextCommand")
+  final case class TextCommand(text: String, args: String) extends TextMessageEx
 
   @key("TextModernMessage")
   final case class TextModernMessage(

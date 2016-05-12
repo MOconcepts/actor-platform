@@ -6,13 +6,15 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.pm.ApplicationInfo;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.database.Cursor;
+import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.ContactsContract;
@@ -22,6 +24,8 @@ import android.support.v4.app.Fragment;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.view.ActionMode;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.text.Editable;
 import android.text.Spannable;
 import android.text.TextWatcher;
@@ -32,21 +36,24 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
 import android.view.animation.TranslateAnimation;
 import android.widget.AdapterView;
 import android.widget.FrameLayout;
+import android.widget.ImageButton;
 import android.widget.ImageView;
-import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Set;
 
-import im.actor.core.api.rpc.ResponseSeqDate;
+import im.actor.core.entity.BotCommand;
 import im.actor.core.entity.MentionFilterResult;
 import im.actor.core.entity.Peer;
 import im.actor.core.entity.PeerType;
+import im.actor.core.entity.content.AbsContent;
 import im.actor.core.network.RpcException;
 import im.actor.core.viewmodel.Command;
 import im.actor.core.viewmodel.CommandCallback;
@@ -58,19 +65,26 @@ import im.actor.runtime.actors.ActorRef;
 import im.actor.runtime.actors.ActorSystem;
 import im.actor.runtime.actors.Props;
 import im.actor.runtime.actors.messages.PoisonPill;
+import im.actor.runtime.actors.messages.Void;
+import im.actor.runtime.function.BiFunction;
+import im.actor.runtime.function.Consumer;
 import im.actor.sdk.ActorSDK;
 import im.actor.sdk.ActorStyle;
 import im.actor.sdk.R;
 import im.actor.sdk.controllers.Intents;
-import im.actor.sdk.controllers.calls.CallActivity;
+import im.actor.sdk.controllers.conversation.botcommands.CommandsAdapter;
 import im.actor.sdk.controllers.conversation.mentions.MentionsAdapter;
 import im.actor.sdk.controllers.conversation.messages.AudioHolder;
-import im.actor.sdk.controllers.conversation.messages.MessagesFragment;
-import im.actor.sdk.controllers.fragment.settings.BaseActorChatActivity;
+import im.actor.sdk.controllers.conversation.view.FastShareAdapter;
+import im.actor.sdk.controllers.settings.BaseActorChatActivity;
 import im.actor.sdk.core.audio.VoiceCaptureActor;
 import im.actor.sdk.intents.ActorIntent;
 import im.actor.sdk.util.Randoms;
 import im.actor.sdk.util.Screen;
+import im.actor.core.utils.GalleryScannerActor;
+import im.actor.sdk.view.TintDrawable;
+import im.actor.sdk.view.adapters.HolderAdapter;
+import im.actor.sdk.view.adapters.RecyclerListView;
 import im.actor.sdk.view.avatar.AvatarView;
 import im.actor.sdk.controllers.conversation.view.TypingDrawable;
 import im.actor.sdk.view.emoji.SmileProcessor;
@@ -78,7 +92,6 @@ import im.actor.sdk.view.markdown.AndroidMarkdown;
 import im.actor.runtime.mvvm.Value;
 import im.actor.runtime.mvvm.ValueChangedListener;
 
-import static im.actor.sdk.util.ViewUtils.expand;
 import static im.actor.sdk.util.ViewUtils.expandMentions;
 import static im.actor.sdk.util.ViewUtils.goneView;
 import static im.actor.sdk.util.ViewUtils.hideView;
@@ -90,6 +103,7 @@ import static im.actor.sdk.util.ActorSDKMessenger.groups;
 import static im.actor.sdk.util.ActorSDKMessenger.messenger;
 import static im.actor.sdk.util.ActorSDKMessenger.users;
 
+@SuppressWarnings("NullableProblems")
 public class ChatActivity extends ActorEditTextActivity {
 
     public static final String EXTRA_CHAT_PEER = "chat_peer";
@@ -108,6 +122,8 @@ public class ChatActivity extends ActorEditTextActivity {
     private static final int PERMISSIONS_REQUEST_CAMERA = 6;
     private static final int PERMISSION_REQUEST_RECORD_AUDIO = 7;
     private static final int PERMISSIONS_REQUEST_FOR_CALL = 8;
+    private static final int PERMISSION_REQ_MEDIA = 11;
+    public static final int MAX_USERS_FOR_CALLS = 5;
     // Peer of current chat
     private Peer peer;
 
@@ -140,10 +156,10 @@ public class ChatActivity extends ActorEditTextActivity {
     private ImageView barTypingIcon;
     // Toolbar typing text
     private TextView barTyping;
-    private boolean isMentionsVisible = false;
+    private boolean isAutocompleteVisible = false;
 
     //////////////////////////////////
-    // Voice messges
+    // Voice messages
     //////////////////////////////////
     private View audioContainer;
     private View recordPoint;
@@ -152,6 +168,7 @@ public class ChatActivity extends ActorEditTextActivity {
     private int slideStart;
     private TextView audioTimer;
     private boolean isAudioVisible;
+    private boolean isShareVisible;
     private int SLIDE_LIMIT;
     ActorRef voiceRecordActor;
     private String audioFile;
@@ -160,16 +177,17 @@ public class ChatActivity extends ActorEditTextActivity {
     //////////////////////////////////
     // Mentions
     //////////////////////////////////
-    private MentionsAdapter mentionsAdapter;
-    private ListView mentionsList;
-    private String mentionSearchString = "";
-    private int mentionStart;
-    private FrameLayout quoteContainer;
+    private HolderAdapter autocompleteAdapter;
+    private CommandsAdapter commandsAdapter;
+    private RecyclerListView autocompleteList;
+    private String autocompleteString = "";
+    private int autocompleteTriggerStart;
 
     //////////////////////////////////
     // Quote
     //////////////////////////////////
     private TextView quoteText;
+    private FrameLayout quoteContainer;
     private String currentQuote = "";
     private String sendUri;
 
@@ -178,11 +196,10 @@ public class ChatActivity extends ActorEditTextActivity {
     //////////////////////////////////
     private ArrayList<String> sendUriMultiple;
     private int shareUser;
-    private String forwardDocDescriptor;
-    private boolean forwardDocIsDoc = true;
     private String forwardText;
     private String forwardTextRaw;
     private String sendText;
+    private AbsContent forwardContent;
     // Camera photo destination name
     private String pending_fileName;
 
@@ -192,6 +209,7 @@ public class ChatActivity extends ActorEditTextActivity {
     private View shareContainer;
     private View shareMenu;
     private int shareMenuMaxHeight = 0;
+    private FastShareAdapter fastShareAdapter;
 
 
     //////////////////////////////////
@@ -204,6 +222,11 @@ public class ChatActivity extends ActorEditTextActivity {
     private Intent intent;
     private boolean textEditing = false;
     private long currentEditRid;
+    private Animation.AnimationListener animationListener;
+    private Menu menu;
+    private boolean isBot = false;
+    private View emptyBotSend;
+    private TextView emptyBotHint;
 
     public static Intent build(Peer peer, boolean compose, Context context) {
         final Intent intent = new Intent(context, ChatActivity.class);
@@ -217,7 +240,7 @@ public class ChatActivity extends ActorEditTextActivity {
         // Reading peer of chat
         intent = getIntent();
         peer = Peer.fromUniqueId(intent.getExtras().getLong(EXTRA_CHAT_PEER));
-
+        checkIsBot();
         if (saveInstance == null) {
             // Set compose state for auto-showing menu
             isCompose = intent.getExtras().getBoolean(EXTRA_CHAT_COMPOSE, false);
@@ -229,6 +252,14 @@ public class ChatActivity extends ActorEditTextActivity {
         super.onCreate(saveInstance);
 
         messageEditText.addTextChangedListener(new TextWatcherImp());
+        messageEditText.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override
+            public void onFocusChange(View v, boolean hasFocus) {
+                if (hasFocus) {
+                    hideShare();
+                }
+            }
+        });
 
         //Voice record
         SLIDE_LIMIT = (int) (Screen.getDensity() * 180);
@@ -236,7 +267,6 @@ public class ChatActivity extends ActorEditTextActivity {
         audioTimer = (TextView) findViewById(R.id.audioTimer);
         audioSlide = findViewById(R.id.audioSlide);
         recordPoint = findViewById(R.id.record_point);
-        ActorSystem.system().addDispatcher("voice_capture_dispatcher", 1);
 
         audioButton = (ImageView) findViewById(R.id.record_btn);
         audioButton.setVisibility(View.VISIBLE);
@@ -270,8 +300,8 @@ public class ChatActivity extends ActorEditTextActivity {
         });
 
         // Mentions
-        mentionsList = (ListView) findViewById(R.id.mentionsList);
-        mentionsList.setBackgroundColor(ActorSDK.sharedActor().style.getMainBackgroundColor());
+        autocompleteList = (RecyclerListView) findViewById(R.id.mentionsList);
+        autocompleteList.setBackgroundColor(ActorSDK.sharedActor().style.getMainBackgroundColor());
 
         //Quote
         quoteContainer = (FrameLayout) findViewById(R.id.quoteContainer);
@@ -283,16 +313,18 @@ public class ChatActivity extends ActorEditTextActivity {
                 goneView(quoteContainer);
                 quoteText.setText("");
                 currentQuote = "";
-                if(textEditing){
+                if (textEditing) {
                     messageEditText.setText("");
                 }
                 textEditing = false;
+                checkSendButton();
 
             }
         });
 
         //share menu
         findViewById(R.id.share_menu).setBackgroundColor(ActorSDK.sharedActor().style.getMainBackgroundColor());
+        findViewById(R.id.fast_share).setBackgroundColor(ActorSDK.sharedActor().style.getMainBackgroundColor());
         shareMenu = findViewById(R.id.share_container);
         shareMenu.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -301,33 +333,17 @@ public class ChatActivity extends ActorEditTextActivity {
             }
         });
         shareContainer = findViewById(R.id.closeMenuLayout);
-        shareContainer.setOnClickListener(new View.OnClickListener() {
+        shareContainer.setOnTouchListener(new View.OnTouchListener() {
             @Override
-            public void onClick(View v) {
-                hideShareMenu();
+            public boolean onTouch(View v, MotionEvent event) {
+                hideShare();
+                return false;
             }
         });
 
-        try {
-            ApplicationInfo app = ChatActivity.this.getPackageManager().getApplicationInfo(ChatActivity.this.getPackageName(), PackageManager.GET_META_DATA);
-            Bundle bundle = app.metaData;
-
-            if (bundle.containsKey("com.google.android.geo.API_KEY")) {
-                findViewById(R.id.share_location).setVisibility(View.VISIBLE);
-                findViewById(R.id.share_hide).setVisibility(View.GONE);
-                findViewById(R.id.location_hide_text).setVisibility(View.VISIBLE);
-
-            } else {
-                findViewById(R.id.share_location).setVisibility(View.GONE);
-                findViewById(R.id.share_hide).setVisibility(View.VISIBLE);
-                findViewById(R.id.location_hide_text).setVisibility(View.INVISIBLE);
-                Log.w("Actor-GoogleMaps", "please, set up google map api key in AndroidManifest metadata to enable share locations");
-            }
-        } catch (PackageManager.NameNotFoundException e) {
-            e.printStackTrace();
-        } catch (NullPointerException e) {
-            e.printStackTrace();
-        }
+        final TextView contactText = (TextView) findViewById(R.id.contact_text);
+        final View shareContact = findViewById(R.id.share_contact);
+        findViewById(R.id.share_hide).setVisibility(View.GONE);
 
         View.OnClickListener shareMenuOCL = new View.OnClickListener() {
             @Override
@@ -340,11 +356,12 @@ public class ChatActivity extends ActorEditTextActivity {
                     File externalFile = Environment.getExternalStorageDirectory();
                     if (externalFile == null) {
                         Toast.makeText(ChatActivity.this, R.string.toast_no_sdcard, Toast.LENGTH_LONG).show();
-                    }else{
+                    } else {
                         String externalPath = externalFile.getAbsolutePath();
-                        new File(externalPath + "/"+ ActorSDK.sharedActor().getAppName() +"/capture/").mkdirs();
+                        String exportPathBase = externalPath + "/" + ActorSDK.sharedActor().getAppName() + "/" + ActorSDK.sharedActor().getAppName() + " images" + "/";
+                        new File(exportPathBase).mkdirs();
 
-                        pending_fileName = externalPath + "/"+ ActorSDK.sharedActor().getAppName() +"/capture/capture_" + Randoms.randomId() + ".jpg";
+                        pending_fileName = exportPathBase + "capture_" + Randoms.randomId() + ".jpg";
                     }
                     if (ContextCompat.checkSelfPermission(ChatActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
                         Log.d("Permissions", "camera - no permission :c");
@@ -360,11 +377,12 @@ public class ChatActivity extends ActorEditTextActivity {
                     File externalFile = Environment.getExternalStorageDirectory();
                     if (externalFile == null) {
                         Toast.makeText(ChatActivity.this, R.string.toast_no_sdcard, Toast.LENGTH_LONG).show();
-                    }else{
+                    } else {
                         String externalPath = externalFile.getAbsolutePath();
-                        new File(externalPath + "/"+ ActorSDK.sharedActor().getAppName() +"/capture/").mkdirs();
+                        String exportPathBase = externalPath + "/" + ActorSDK.sharedActor().getAppName() + "/" + ActorSDK.sharedActor().getAppName() + " video" + "/";
+                        new File(exportPathBase).mkdirs();
 
-                        pending_fileName = externalPath + "/"+ ActorSDK.sharedActor().getAppName() +"/capture/capture_" + Randoms.randomId() + ".mp4";
+                        pending_fileName = exportPathBase + "capture_" + Randoms.randomId() + ".mp4";
 
                         Intent i = new Intent(MediaStore.ACTION_VIDEO_CAPTURE)
                                 .putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(new File(pending_fileName)));
@@ -382,20 +400,72 @@ public class ChatActivity extends ActorEditTextActivity {
                 }
 
                 //hide it
-                hideShareMenu();
+                hideShare();
             }
         };
 
         findViewById(R.id.share_gallery).setOnClickListener(shareMenuOCL);
         findViewById(R.id.share_video).setOnClickListener(shareMenuOCL);
         findViewById(R.id.share_camera).setOnClickListener(shareMenuOCL);
-        findViewById(R.id.share_location).setOnClickListener(shareMenuOCL);
+        shareContact.setOnClickListener(shareMenuOCL);
         findViewById(R.id.share_file).setOnClickListener(shareMenuOCL);
         findViewById(R.id.share_hide).setOnClickListener(shareMenuOCL);
-        findViewById(R.id.share_contact).setOnClickListener(shareMenuOCL);
+        View shareLocation = findViewById(R.id.share_location);
+        shareLocation.setOnClickListener(shareMenuOCL);
         handleIntent();
 
+        try {
+            Class.forName("com.google.android.gms.maps.GoogleMap");
+        } catch (ClassNotFoundException e) {
+            shareLocation.setVisibility(View.GONE);
+            findViewById(R.id.share_hide).setVisibility(View.VISIBLE);
+            findViewById(R.id.location_text).setVisibility(View.INVISIBLE);
+        }
 
+
+        final ImageButton shareMenuSend = (ImageButton) findViewById(R.id.share_send);
+        shareMenuSend.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+        shareMenuSend.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Set<String> strings = fastShareAdapter.getSelectedVM().get();
+                for (String s : strings.toArray(new String[strings.size()])) {
+                    execute(messenger().sendUri(peer, Uri.fromFile(new File(s))));
+                }
+                fastShareAdapter.clearSelected();
+                hideShare();
+            }
+        });
+
+        RecyclerView fastShare = (RecyclerView) findViewById(R.id.fast_share);
+        if (ActorSDK.sharedActor().isFastShareEnabled()) {
+            fastShareAdapter = new FastShareAdapter(this);
+            LinearLayoutManager layoutManager = new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false);
+            fastShare.setAdapter(fastShareAdapter);
+            fastShare.setLayoutManager(layoutManager);
+
+            fastShareAdapter.getSelectedVM().subscribe(new ValueChangedListener<Set<String>>() {
+                @Override
+                public void onChanged(Set<String> val, Value<Set<String>> valueModel) {
+                    if (val.size() > 0) {
+                        shareContact.setVisibility(View.INVISIBLE);
+                        shareMenuSend.setVisibility(View.VISIBLE);
+                        contactText.setText(getString(R.string.chat_doc_send) + "(" + val.size() + ")");
+                    } else {
+                        shareContact.setVisibility(View.VISIBLE);
+                        shareMenuSend.setVisibility(View.INVISIBLE);
+                        contactText.setText(getString(R.string.share_menu_contact));
+                    }
+                }
+            });
+        } else {
+            fastShare.setVisibility(View.GONE);
+        }
+
+        emptyBotSend = findViewById(R.id.botEmptyTextBlock);
+        emptyBotHint = (TextView) findViewById(R.id.botEmptyHint);
+
+        checkEmptyBot();
     }
 
     private void startCamera() {
@@ -415,8 +485,11 @@ public class ChatActivity extends ActorEditTextActivity {
         forwardText = intent.getStringExtra("forward_text");
         forwardTextRaw = intent.getStringExtra("forward_text_raw");
         sendText = intent.getStringExtra("send_text");
-        forwardDocDescriptor = intent.getStringExtra("forward_doc_descriptor");
-        forwardDocIsDoc = intent.getBooleanExtra("forward_doc_is_doc", true);
+        try {
+            forwardContent = AbsContent.parse(intent.getByteArrayExtra("forward_content"));
+        } catch (Exception e) {
+
+        }
     }
 
     @Override
@@ -434,13 +507,6 @@ public class ChatActivity extends ActorEditTextActivity {
         handleIntent();
     }
 
-    private void hideShareMenu() {
-        if (shareMenu.getVisibility() == View.VISIBLE) {
-            //hideView(shareMenu);
-            expand(shareMenu, 0);
-            shareContainer.setVisibility(View.GONE);
-        }
-    }
 
     @Override
     protected Fragment onCreateFragment() {
@@ -505,7 +571,13 @@ public class ChatActivity extends ActorEditTextActivity {
 
     @Override
     public void onResume() {
+        checkIsBot();
         super.onResume();
+
+        if (peer.getPeerType() == PeerType.PRIVATE && menu != null) {
+            menu.findItem(R.id.add_to_contacts).setVisible(users().get(peer.getPeerId()).isContact().get());
+            invalidateOptionsMenu();
+        }
 
         emojiKeyboard.setPeer(peer);
 
@@ -604,15 +676,48 @@ public class ChatActivity extends ActorEditTextActivity {
             forwardTextRaw = "";
         }
 
-        if (forwardDocDescriptor != null && !forwardDocDescriptor.isEmpty()) {
-            if (forwardDocIsDoc) {
-                messenger().sendDocument(peer, forwardDocDescriptor);
-            } else {
-                execute(messenger().sendUri(peer, Uri.fromFile(new File(forwardDocDescriptor))));
-            }
-            forwardDocDescriptor = "";
+        if (forwardContent != null) {
+            messenger().forwardContent(peer, forwardContent);
+            forwardContent = null;
+        }
+
+        if (isBot) {
+            emptyBotSend.setBackgroundColor(ActorSDK.sharedActor().style.getMainBackgroundColor());
+            TextView emptyBotSendText = (TextView) emptyBotSend.findViewById(R.id.empty_bot_text);
+            emptyBotSendText.setTextColor(ActorSDK.sharedActor().style.getMainColor());
+
+            emptyBotSendText.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    messenger().sendMessage(peer, "/start");
+                }
+            });
+
+            checkEmptyBot();
+        }
+
+
+    }
+
+    public void checkIsBot() {
+        isBot = (peer.getPeerType() == PeerType.PRIVATE && users().get(peer.getPeerId()).isBot());
+    }
+
+    public void checkEmptyBot() {
+        if (isBot) {
+            messenger().isStarted(peer.getPeerId())
+                    .then(empty -> {
+                        if (empty) {
+                            showView(emptyBotSend);
+                            showView(emptyBotHint);
+                        } else {
+                            hideView(emptyBotSend);
+                            hideView(emptyBotHint);
+                        }
+                    });
         }
     }
+
 
     @Override
     protected void onPerformBind() {
@@ -635,14 +740,45 @@ public class ChatActivity extends ActorEditTextActivity {
             // Binding User name to Toolbar
             bind(barTitle, user.getName());
 
+            bind(user.getIsVerified(), new ValueChangedListener<Boolean>() {
+                @Override
+                public void onChanged(Boolean val, Value<Boolean> valueModel) {
+
+                    barTitle.setCompoundDrawablesWithIntrinsicBounds(
+                            null,
+                            null,
+                            val ? new TintDrawable(
+                                    getResources().getDrawable(R.drawable.ic_verified_user_black_18dp),
+                                    ActorSDK.sharedActor().style.getVerifiedColor()) : null,
+                            null);
+                }
+            });
+
+
             // Binding User presence to Toolbar
-            bind(barSubtitle, barSubtitleContainer, user);
+            bind(barSubtitle, user);
 
             // Binding User typing to Toolbar
             bindPrivateTyping(barTyping, barTypingContainer, barSubtitle, messenger().getTyping(user.getId()));
 
-            // Hide removedFromGroup panel as we are not in group
-            removedFromGroup.setVisibility(View.GONE);
+            // Bind user blocked
+            inputBlockedText.setText(R.string.profile_settings_unblock);
+            bind(users().get(peer.getPeerId()).getIsBlocked(), (val, valueModel) -> {
+                inputBlockContainer.setVisibility(val ? View.VISIBLE : View.GONE);
+            });
+            inputBlockedText.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    execute(messenger().unblockUser(peer.getPeerId()));
+                }
+            });
+
+            // Bind empty bot about
+            if (isBot) {
+                bind(users().get(peer.getPeerId()).getAbout(), (about, valueModel) -> {
+                    emptyBotHint.setText((about != null && !about.isEmpty()) ? about : getString(R.string.chat_empty_bot_about));
+                });
+            }
 
         } else if (peer.getPeerType() == PeerType.GROUP) {
 
@@ -668,11 +804,11 @@ public class ChatActivity extends ActorEditTextActivity {
             // Binding group typing
             bindGroupTyping(barTyping, barTypingContainer, barSubtitle, messenger().getGroupTyping(group.getId()));
 
-            // Binding membership flag to removedFromGroup panel
+            // Binding membership flag to inputBlockContainer panel
             bind(messenger().getGroups().get(peer.getPeerId()).isMember(), new ValueChangedListener<Boolean>() {
                 @Override
                 public void onChanged(Boolean val, Value<Boolean> Value) {
-                    removedFromGroup.setVisibility(val ? View.GONE : View.VISIBLE);
+                    inputBlockContainer.setVisibility(val ? View.GONE : View.VISIBLE);
                 }
             });
         }
@@ -680,7 +816,7 @@ public class ChatActivity extends ActorEditTextActivity {
         bindGlobalCounter(new ValueChangedListener<Integer>() {
             @Override
             public void onChanged(Integer val, Value<Integer> valueModel) {
-                if (val > 0) {
+                if (val != null && val > 0) {
                     counter.setText(Integer.toString(val));
                     showView(counter);
                 } else {
@@ -698,6 +834,7 @@ public class ChatActivity extends ActorEditTextActivity {
         AudioHolder.stopPlaying();
         // Saving draft
         messenger().saveDraft(peer, messageEditText.getText().toString());
+
     }
 
     // Message send
@@ -714,7 +851,7 @@ public class ChatActivity extends ActorEditTextActivity {
         }
 
         messageEditText.setText("");
-        mentionSearchString = "";
+        autocompleteString = "";
 
         if (rawText.length() == 0) {
             return;
@@ -724,12 +861,13 @@ public class ChatActivity extends ActorEditTextActivity {
         if (getResources().getDisplayMetrics().heightPixels <=
                 getResources().getDisplayMetrics().widthPixels) {
             keyboardUtils.setImeVisibility(messageEditText, false);
+            messageEditText.clearFocus();
         }
 
-        if(textEditing){
-            execute(messenger().updateMessage(peer, rawText, currentEditRid), new CommandCallback<ResponseSeqDate>() {
+        if (textEditing) {
+            execute(messenger().updateMessage(peer, rawText, currentEditRid), new CommandCallback<Void>() {
                 @Override
-                public void onResult(ResponseSeqDate res) {
+                public void onResult(Void res) {
 
                 }
 
@@ -740,9 +878,9 @@ public class ChatActivity extends ActorEditTextActivity {
                         public void run() {
                             RpcException re = (RpcException) e;
                             String error = "";
-                            if(re.getTag().equals("NOT_IN_TIME_WINDOW")){
+                            if (re.getTag().equals("NOT_IN_TIME_WINDOW")) {
                                 error = getString(R.string.edit_message_error_slowpoke);
-                            }else if(re.getTag().equals("NOT_LAST_MESSAGE")){
+                            } else if (re.getTag().equals("NOT_LAST_MESSAGE")) {
                                 error = getString(R.string.edit_message_error_not_last);
                             }
                             Toast.makeText(ChatActivity.this, error, Toast.LENGTH_LONG).show();
@@ -751,8 +889,9 @@ public class ChatActivity extends ActorEditTextActivity {
                 }
             });
             goneView(quoteContainer);
+            checkSendButton();
             textEditing = false;
-        }else{
+        } else {
             messenger().sendMessage(peer, rawText);
         }
     }
@@ -831,15 +970,16 @@ public class ChatActivity extends ActorEditTextActivity {
 //        });
 //        popup.show();
         if (shareMenuMaxHeight == 0) {
-            shareMenuMaxHeight = Screen.dp(180);
+            shareMenuMaxHeight = Screen.dp(245);
         }
         if (shareMenu.getVisibility() == View.VISIBLE) {
-            hideShareMenu();
+            hideShare();
         } else {
             shareContainer.setVisibility(View.VISIBLE);
-            expand(shareMenu, shareMenuMaxHeight);
+            showShare();
             if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
                 keyboardUtils.setImeVisibility(messageEditText, false);
+                messageEditText.clearFocus();
             }
         }
     }
@@ -940,25 +1080,39 @@ public class ChatActivity extends ActorEditTextActivity {
     }
 
     // Mentions
+    // Bot commands
 
-    private void showMentions(boolean initEmpty) {
-        if (isMentionsVisible) {
+    private void showAutoComplete(boolean initEmpty, boolean isMentions) {
+        if (isAutocompleteVisible) {
             return;
         }
-        isMentionsVisible = true;
+        isAutocompleteVisible = true;
 
+        if (!isMentions) {
+            autocompleteAdapter = new CommandsAdapter(peer.getPeerId(), this, new CommandsAdapter.CommandsUpdatedCallback() {
+                @Override
+                public void onMentionsUpdated(int oldRowsCount, int newRowsCount) {
+                    onMentionsChanged(oldRowsCount, newRowsCount);
+                }
+            });
+        } else {
+            GroupVM groupInfo = groups().get(peer.getPeerId());
+            autocompleteAdapter = new MentionsAdapter(groupInfo.getId(), this, new MentionsAdapter.MentionsUpdatedCallback() {
 
-        GroupVM groupInfo = groups().get(peer.getPeerId());
-        mentionsAdapter = new MentionsAdapter(groupInfo.getId(), this, new MentionsAdapter.MentionsUpdatedCallback() {
+                @Override
+                public void onMentionsUpdated(int oldRowsCount, int newRowsCount) {
+                    onMentionsChanged(oldRowsCount, newRowsCount);
+                }
+            }, initEmpty);
+        }
 
-            @Override
-            public void onMentionsUpdated(int oldRowsCount, int newRowsCount) {
-                onMentionsChanged(oldRowsCount, newRowsCount);
-            }
-        }, initEmpty);
+//        if(autocompleteAdapter.getCount() == 0){
+//            isAutocompleteVisible = false;
+//            return;
+//        }
 
-        mentionsList.setAdapter(mentionsAdapter);
-        mentionsList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+        autocompleteList.setAdapter(autocompleteAdapter);
+        autocompleteList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 Object item = parent.getItemAtPosition(position);
@@ -966,40 +1120,45 @@ public class ChatActivity extends ActorEditTextActivity {
 
                     String origMention = ((MentionFilterResult) item).getMentionString();
 
-                    if (mentionStart != -1 && mentionStart + mentionSearchString.length() + 1 <= messageEditText.getText().length()) {
+                    if (autocompleteTriggerStart != -1 && autocompleteTriggerStart + autocompleteString.length() + 1 <= messageEditText.getText().length()) {
 
-                        String mentionString = origMention + ": ";
+                        String mentionString = origMention + (autocompleteTriggerStart == 0 ? ": " : " ");
 
                         Editable text = messageEditText.getText();
 
-                        int cursorPosition = mentionStart + mentionString.length();
+                        int cursorPosition = autocompleteTriggerStart + mentionString.length();
 
-                        text.replace(mentionStart, mentionStart + mentionSearchString.length() + 1, mentionString);
+                        text.replace(autocompleteTriggerStart, autocompleteTriggerStart + autocompleteString.length() + 1, mentionString);
 
                         messageEditText.setSelection(cursorPosition, cursorPosition);
                     }
                     hideMentions();
+                } else if (item != null && item instanceof BotCommand) {
+                    messenger().sendMessage(peer, "/".concat(((BotCommand) item).getSlashCommand()));
+                    messageEditText.setText("");
+                    hideMentions();
                 }
             }
         });
-        hideShareMenu();
-        expandMentions(mentionsList, 0, mentionsList.getCount());
+        hideShare();
+
+        expandMentions(autocompleteList, 0, autocompleteList.getCount());
     }
 
     private void hideMentions() {
-        if (!isMentionsVisible) {
+        if (!isAutocompleteVisible) {
             return;
         }
-        isMentionsVisible = false;
+        isAutocompleteVisible = false;
 
-        expandMentions(mentionsList, mentionsAdapter.getCount(), 0);
-        mentionsAdapter = null;
-        mentionsList.setAdapter(null);
+        expandMentions(autocompleteList, autocompleteAdapter.getCount(), 0);
+        autocompleteAdapter = null;
+        autocompleteList.setAdapter(null);
     }
 
     private void onMentionsChanged(int oldRowsCount, int newRowsCount) {
-        if (mentionsAdapter != null) {
-            expandMentions(mentionsList, oldRowsCount, newRowsCount);
+        if (autocompleteAdapter != null) {
+            expandMentions(autocompleteList, oldRowsCount, newRowsCount);
         }
     }
 
@@ -1010,7 +1169,7 @@ public class ChatActivity extends ActorEditTextActivity {
         Editable text = messageEditText.getText();
         if (text.length() > 0 && text.charAt(text.length() - 1) != ' ') text.append(" ");
 
-        String mentionString = ((nick != null && !nick.isEmpty()) ? "@" + nick : name) + ": ";
+        String mentionString = ((nick != null && !nick.isEmpty()) ? "@" + nick : name) + (messageEditText.getText().length() > 0 ? " " : ": ");
 
         text.append(mentionString);
         messageEditText.requestFocus();
@@ -1028,17 +1187,21 @@ public class ChatActivity extends ActorEditTextActivity {
             quoteText.setText(rawQuote);
         }
         currentQuote = rawQuote;
-        hideShareMenu();
+        hideShare();
         quoteText.setCompoundDrawablesWithIntrinsicBounds(getResources().getDrawable(R.drawable.ic_editor_format_quote_gray), null, null, null);
         showView(quoteContainer);
+        checkSendButton();
+
     }
 
     // Back button handling
 
     @Override
     public void onBackPressed() {
-        if (isMentionsVisible) {
+        if (isAutocompleteVisible) {
             hideMentions();
+        } else if (isShareVisible) {
+            hideShare();
         } else if (emojiKeyboard.isShowing()) {
             emojiKeyboard.dismiss();
         } else {
@@ -1049,7 +1212,8 @@ public class ChatActivity extends ActorEditTextActivity {
     // Options Menu
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
+    public boolean onCreateOptionsMenu(final Menu menu) {
+        this.menu = menu;
 
         // Inflating menu
         getMenuInflater().inflate(R.menu.chat_menu, menu);
@@ -1075,10 +1239,25 @@ public class ChatActivity extends ActorEditTextActivity {
             menu.findItem(R.id.leaveGroup).setVisible(false);
         }
 
-        if (!ActorSDK.sharedActor().isCallsEnabled()) {
-            menu.findItem(R.id.call).setVisible(false);
+        boolean callsEnabled = ActorSDK.sharedActor().isCallsEnabled();
+        if (callsEnabled) {
+            if (peer.getPeerType() == PeerType.PRIVATE) {
+                callsEnabled = !users().get(peer.getPeerId()).isBot();
+            } else if (peer.getPeerType() == PeerType.GROUP) {
+                callsEnabled = groups().get(peer.getPeerId()).getMembersCount() <= MAX_USERS_FOR_CALLS;
+            }
         }
+        menu.findItem(R.id.call).setVisible(callsEnabled);
 
+        if (peer.getPeerType() == PeerType.PRIVATE) {
+            bind(users().get(peer.getPeerId()).isContact(), new ValueChangedListener<Boolean>() {
+                @Override
+                public void onChanged(Boolean val, Value<Boolean> valueModel) {
+                    menu.findItem(R.id.add_to_contacts).setVisible(!val);
+                    invalidateOptionsMenu();
+                }
+            });
+        }
 
         // Hide unsupported files menu
         menu.findItem(R.id.files).setVisible(false);
@@ -1088,6 +1267,8 @@ public class ChatActivity extends ActorEditTextActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
+        keyboardUtils.setImeVisibility(messageEditText, false);
+        messageEditText.clearFocus();
         int i = item.getItemId();
         if (i == android.R.id.home) {
             finish();
@@ -1098,7 +1279,18 @@ public class ChatActivity extends ActorEditTextActivity {
                     .setPositiveButton(R.string.alert_delete_all_messages_yes, new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            execute(messenger().clearChat(peer));
+                            execute(messenger().clearChat(peer), R.string.progress_common,
+                                    new CommandCallback<Void>() {
+                                        @Override
+                                        public void onResult(Void res) {
+
+                                        }
+
+                                        @Override
+                                        public void onError(Exception e) {
+                                            Toast.makeText(getApplicationContext(), R.string.toast_unable_clear_chat, Toast.LENGTH_LONG).show();
+                                        }
+                                    });
                         }
                     })
                     .setNegativeButton(R.string.dialog_cancel, null)
@@ -1112,7 +1304,22 @@ public class ChatActivity extends ActorEditTextActivity {
                     .setPositiveButton(R.string.alert_leave_group_yes, new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog2, int which) {
-                            execute(messenger().leaveGroup(peer.getPeerId()));
+                            execute(messenger().leaveGroup(peer.getPeerId()), R.string.progress_common, new CommandCallback<Void>() {
+                                @Override
+                                public void onResult(Void res) {
+
+                                }
+
+                                @Override
+                                public void onError(final Exception e) {
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            Toast.makeText(getApplicationContext(), R.string.toast_unable_leave, Toast.LENGTH_LONG).show();
+                                        }
+                                    });
+                                }
+                            });
                             finish();
                         }
                     })
@@ -1128,6 +1335,8 @@ public class ChatActivity extends ActorEditTextActivity {
 
         } else if (i == R.id.files) {// startActivity(Intents.openDocs(chatType, chatId, ChatActivity.this));
 
+        } else if (i == R.id.add_to_contacts) {
+            execute(messenger().addContact(peer.getPeerId()));
         }
 
         if (ActorSDK.sharedActor().isCallsEnabled()) {
@@ -1139,7 +1348,7 @@ public class ChatActivity extends ActorEditTextActivity {
                     ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.VIBRATE, Manifest.permission.WAKE_LOCK},
                             PERMISSIONS_REQUEST_FOR_CALL);
 
-                }else{
+                } else {
                     startCall();
                 }
             }
@@ -1157,10 +1366,10 @@ public class ChatActivity extends ActorEditTextActivity {
 
     private void startCall() {
         Command<Long> cmd;
-        if(peer.getPeerType() == PeerType.PRIVATE){
+        if (peer.getPeerType() == PeerType.PRIVATE) {
             cmd = messenger().doCall(peer.getPeerId());
 
-        }else{
+        } else {
             cmd = messenger().doGroupCall(peer.getPeerId());
         }
         execute(cmd, R.string.progress_common);
@@ -1195,10 +1404,11 @@ public class ChatActivity extends ActorEditTextActivity {
         quoteText.setCompoundDrawablesWithIntrinsicBounds(getResources().getDrawable(R.drawable.ic_content_create), null, null, null);
         quoteText.setText(R.string.edit_message);
         messageEditText.setText(text);
-        hideShareMenu();
+        hideShare();
         showView(quoteContainer);
-
+        //we don't force check send button here, because it forces from text watcher
     }
+
 
     private class TextWatcherImp implements TextWatcher {
 
@@ -1231,50 +1441,69 @@ public class ChatActivity extends ActorEditTextActivity {
 
             currentWord = currentWord.isEmpty() ? str : currentWord;
 
-            if (peer.getPeerType() == PeerType.GROUP) {
-                //Open mentions
-                if (count == 1 && s.charAt(start) == '@' && !str.endsWith(" ")) {
-                    showMentions(false);
-                    mentionSearchString = "";
+            char autocompleteTriggerChar = '@';
+            String autocompleteTriggerString = "@";
 
-                } else if (currentWord.startsWith("@") && !str.endsWith(" ")) {
-                    showMentions(true);
+
+            if (peer.getPeerType() == PeerType.GROUP || isBot) {
+
+                if (isBot) {
+                    autocompleteTriggerChar = '/';
+                    autocompleteTriggerString = "/";
+                }
+                //Open mentions
+                if (count == 1 && s.charAt(start) == autocompleteTriggerChar && !str.endsWith(" ")) {
+                    showAutoComplete(false, !isBot);
+                    autocompleteString = "";
+
+                } else if (currentWord.startsWith(autocompleteTriggerString) && !str.endsWith(" ")) {
+                    showAutoComplete(true, !isBot);
                 } else {
                     hideMentions();
                 }
 
                 //Set mentions query
-                mentionStart = firstPeace.lastIndexOf("@");
-                if (currentWord.startsWith("@") && currentWord.length() > 1) {
-                    mentionSearchString = currentWord.substring(1, currentWord.length());
+                autocompleteTriggerStart = firstPeace.lastIndexOf(autocompleteTriggerString);
+                if (currentWord.startsWith(autocompleteTriggerString) && currentWord.length() > 1) {
+                    autocompleteString = currentWord.substring(1, currentWord.length());
                 } else {
-                    mentionSearchString = "";
+                    autocompleteString = "";
                 }
 
-                if (mentionSearchString.equals(" ")) {
+                if (autocompleteString.equals(" ")) {
                     hideMentions();
-                } else if (mentionsAdapter != null) {
-                    //mentionsDisplay.initSearch(mentionSearchString, false);
-                    mentionsAdapter.setQuery(mentionSearchString.toLowerCase());
+                } else if (autocompleteAdapter != null) {
+                    //mentionsDisplay.initSearch(autocompleteString, false);
+                    if (autocompleteAdapter instanceof MentionsAdapter) {
+                        ((MentionsAdapter) autocompleteAdapter).setQuery(autocompleteString.toLowerCase());
+                    } else if (autocompleteAdapter instanceof CommandsAdapter) {
+                        ((CommandsAdapter) autocompleteAdapter).setQuery(autocompleteString.toLowerCase());
+                    }
                 }
             }
         }
 
         @Override
         public void afterTextChanged(Editable s) {
-            if (s.length() > 0) {
-                sendButton.setTint(ActorSDK.sharedActor().style.getConvSendEnabledColor());
-                sendButton.setEnabled(true);
-                zoomInView(sendButton);
-                zoomOutView(audioButton);
-            } else {
-                sendButton.setTint(ActorSDK.sharedActor().style.getConvSendDisabledColor());
-                sendButton.setEnabled(false);
-                zoomInView(audioButton);
-                zoomOutView(sendButton);
-            }
+            checkSendButton(s.length() > 0);
+        }
+    }
 
+    public void checkSendButton() {
+        checkSendButton(messageEditText.getText().length() > 0);
+    }
 
+    public void checkSendButton(boolean hasText) {
+        if (hasText || (currentQuote != null && !currentQuote.isEmpty())) {
+            sendButton.setTint(ActorSDK.sharedActor().style.getConvSendEnabledColor());
+            sendButton.setEnabled(true);
+            zoomInView(sendButton);
+            zoomOutView(audioButton);
+        } else {
+            sendButton.setTint(ActorSDK.sharedActor().style.getConvSendDisabledColor());
+            sendButton.setEnabled(false);
+            zoomInView(audioButton);
+            zoomOutView(sendButton);
         }
     }
 
@@ -1297,6 +1526,9 @@ public class ChatActivity extends ActorEditTextActivity {
         hideView(sendContainer);
 
         audioFile = ActorSDK.sharedActor().getMessenger().getInternalTempFile("voice_msg", "opus");
+
+
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_NOSENSOR);
 
         long id = VoiceCaptureActor.LAST_ID.incrementAndGet();
         voiceRecordActor.send(new VoiceCaptureActor.Start(audioFile));
@@ -1321,6 +1553,22 @@ public class ChatActivity extends ActorEditTextActivity {
         recordPoint.animate();
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (autocompleteAdapter != null) {
+            autocompleteAdapter.dispose();
+        }
+        if (fastShareAdapter != null) {
+            fastShareAdapter.release();
+            fastShareAdapter = null;
+        }
+
+        if (barAvatar != null) {
+            barAvatar.unbind();
+        }
+    }
+
     private void hideAudio(boolean cancel) {
         if (!isAudioVisible) {
             return;
@@ -1332,6 +1580,9 @@ public class ChatActivity extends ActorEditTextActivity {
         showView(emojiButton);
         showView(sendContainer);
 
+
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+
         voiceRecordActor.send(new VoiceCaptureActor.Stop(cancel));
         TranslateAnimation animation = new TranslateAnimation(0, Screen.getWidth(), 0, 0);
         animation.setDuration(160);
@@ -1340,6 +1591,80 @@ public class ChatActivity extends ActorEditTextActivity {
         audioContainer.animate();
         audioContainer.setVisibility(View.GONE);
         messageEditText.requestFocus();
+
+    }
+
+    private boolean animationInProgress = false;
+
+    private void showShare() {
+        keyboardUtils.setImeVisibility(messageEditText, false);
+        messageEditText.clearFocus();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(ChatActivity.this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+
+                ActivityCompat.requestPermissions(ChatActivity.this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, PERMISSION_REQ_MEDIA);
+
+            } else {
+                showShareChecked();
+            }
+        } else {
+            showShareChecked();
+        }
+    }
+
+    private void showShareChecked() {
+        if (animationInProgress) {
+            return;
+        }
+        if (animationListener == null) {
+            animationListener = new Animation.AnimationListener() {
+                @Override
+                public void onAnimationStart(Animation animation) {
+                    animationInProgress = true;
+                }
+
+                @Override
+                public void onAnimationEnd(Animation animation) {
+                    animationInProgress = false;
+                }
+
+                @Override
+                public void onAnimationRepeat(Animation animation) {
+
+                }
+            };
+        }
+
+        TranslateAnimation animation = new TranslateAnimation(0, 0, Screen.getHeight(), 0);
+        animation.setDuration(160);
+        animation.setAnimationListener(animationListener);
+        shareMenu.clearAnimation();
+        shareMenu.setAnimation(animation);
+        shareMenu.animate();
+        shareMenu.setVisibility(View.VISIBLE);
+        isShareVisible = true;
+        if (ActorSDK.sharedActor().isFastShareEnabled()) {
+            messenger().getGalleryScannerActor().send(new GalleryScannerActor.Show());
+        }
+    }
+
+    private void hideShare() {
+        if (!isShareVisible || animationInProgress) {
+            return;
+        }
+        isShareVisible = false;
+        TranslateAnimation animation = new TranslateAnimation(0, 0, 0, Screen.getHeight());
+        animation.setDuration(160);
+
+        animation.setAnimationListener(animationListener);
+        shareMenu.clearAnimation();
+        shareMenu.setAnimation(animation);
+        shareMenu.animate();
+        shareMenu.setVisibility(View.GONE);
+        shareContainer.setVisibility(View.GONE);
+        if (ActorSDK.sharedActor().isFastShareEnabled()) {
+            messenger().getGalleryScannerActor().send(new GalleryScannerActor.Hide());
+        }
 
     }
 
@@ -1359,6 +1684,11 @@ public class ChatActivity extends ActorEditTextActivity {
             if (grantResults.length > 0
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startCamera();
+            }
+        } else if (requestCode == PERMISSION_REQ_MEDIA) {
+            if (grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                showShareChecked();
             }
         }
     }

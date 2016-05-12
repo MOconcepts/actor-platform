@@ -51,7 +51,9 @@ export default {
       'addMembers': 'Añadir miembros',
       'quickSearch': 'Búsqueda rápida',
       'close': 'Cerca',
-      'save': 'Guardar'
+      'save': 'Guardar',
+      'call': 'Llamada',
+      'archive': 'Todos'
     },
 
     // Messages
@@ -87,7 +89,7 @@ export default {
 
     // Compose
     'compose': {
-      'attach': 'Acoplamiento',
+      'attach': 'Adjuntar',
       'sendFile': 'Enviar archivo',
       'sendPhoto': 'Enviar foto',
       'send': 'Enviar',
@@ -244,6 +246,20 @@ export default {
     'preferencesSessionsTerminate': 'Eliminar',
     'preferencesSessionsTerminateAll': 'Terminar todas las sesiones',
 
+    // Sidebar
+    'sidebar': {
+      'recents': {
+        'groups': 'Grupos',
+        'privates': 'Mensajes directos'
+      },
+      'group': {
+        'empty': 'Crea tu primer grupo de conversación'
+      },
+      'private': {
+        'empty': 'No hay nadie en su red'
+      }
+    },
+
     'main': {
       'empty': 'Seleccione diálogo o iniciar uno nuevo.',
       'install': '<h1>Versión Web de <b>{appName}</b> Versión solo para navegadores</h1>' +
@@ -274,6 +290,15 @@ export default {
         in_progress: 'Llamada activa: {time}',
         ended: 'Llamada finalizada'
       }
+    },
+
+    context: {
+      favorite: {
+        add: 'Favorito',
+        remove: 'Eliminar de favoritos'
+      },
+      archive: 'Enviar a archivar',
+      delete: 'Eliminar'
     }
   }
 };

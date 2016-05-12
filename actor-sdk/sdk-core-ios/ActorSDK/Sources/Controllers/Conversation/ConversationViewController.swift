@@ -7,7 +7,6 @@ import UIKit
 import MobileCoreServices
 import AddressBook
 import AddressBookUI
-import SVProgressHUD
 
 public class ConversationViewController:
     AAConversationContentController,
@@ -18,7 +17,8 @@ public class ConversationViewController:
     AALocationPickerControllerDelegate,
     ABPeoplePickerNavigationControllerDelegate,
     AAAudioRecorderDelegate,
-    AAConvActionSheetDelegate {
+    AAConvActionSheetDelegate,
+    AAStickersKeyboardDelegate {
     
     // Data binder
     private let binder = AABinder()
@@ -47,7 +47,7 @@ public class ConversationViewController:
     // Stickers
     //
     
-    private var stickersView: AAStickersView!
+    private var stickersView: AAStickersKeyboard!
     private var stickersButton : UIButton!
     private var stickersOpen = false
     
@@ -72,7 +72,7 @@ public class ConversationViewController:
     // MARK: - Init
     ////////////////////////////////////////////////////////////
     
-    override init(peer: ACPeer) {
+    required override public init(peer: ACPeer) {
         
         // Data
         
@@ -132,7 +132,7 @@ public class ConversationViewController:
         self.stickersButton = UIButton(type: UIButtonType.System)
         self.stickersButton.tintColor = UIColor.lightGrayColor().colorWithAlphaComponent(0.5)
         self.stickersButton.setImage(UIImage.bundled("sticker_button"), forState: UIControlState.Normal)
-        self.stickersButton.addTarget(self, action: "changeKeyboard", forControlEvents: UIControlEvents.TouchUpInside)
+        self.stickersButton.addTarget(self, action: #selector(ConversationViewController.changeKeyboard), forControlEvents: UIControlEvents.TouchUpInside)
         self.textInputbar.addSubview(stickersButton)
         
         
@@ -152,9 +152,9 @@ public class ConversationViewController:
             
             self.rightButton.layoutIfNeeded()
             
-            self.rightButton.addTarget(self, action: "beginRecord:event:", forControlEvents: UIControlEvents.TouchDown)
-            self.rightButton.addTarget(self, action: "mayCancelRecord:event:", forControlEvents: UIControlEvents.TouchDragInside.union(UIControlEvents.TouchDragOutside))
-            self.rightButton.addTarget(self, action: "finishRecord:event:", forControlEvents: UIControlEvents.TouchUpInside.union(UIControlEvents.TouchCancel).union(UIControlEvents.TouchUpOutside))
+            self.rightButton.addTarget(self, action: #selector(ConversationViewController.beginRecord(_:event:)), forControlEvents: UIControlEvents.TouchDown)
+            self.rightButton.addTarget(self, action: #selector(ConversationViewController.mayCancelRecord(_:event:)), forControlEvents: UIControlEvents.TouchDragInside.union(UIControlEvents.TouchDragOutside))
+            self.rightButton.addTarget(self, action: #selector(ConversationViewController.finishRecord(_:event:)), forControlEvents: UIControlEvents.TouchUpInside.union(UIControlEvents.TouchCancel).union(UIControlEvents.TouchUpOutside))
             
         } else {
             
@@ -245,11 +245,12 @@ public class ConversationViewController:
         navigationItem.backBarButtonItem = UIBarButtonItem(title: "", style: UIBarButtonItemStyle.Plain, target: nil, action: nil)
         
         let frame = CGRectMake(0, 0, self.view.frame.size.width, 216)
-        self.stickersView = AAStickersView(frame: frame, convController: self)
+        self.stickersView = AAStickersKeyboard(frame: frame)
+        self.stickersView.delegate = self
         
         NSNotificationCenter.defaultCenter().addObserver(
             self,
-            selector: "updateStickersStateOnCloseKeyboard",
+            selector: #selector(ConversationViewController.updateStickersStateOnCloseKeyboard),
             name: SLKKeyboardWillHideNotification,
             object: nil)
     }
@@ -260,7 +261,6 @@ public class ConversationViewController:
         self.stickersButton.frame = CGRectMake(self.view.frame.size.width-67, 12, 20, 20)
     }
     
-    
     ////////////////////////////////////////////////////////////
     // MARK: - Lifecycle
     ////////////////////////////////////////////////////////////
@@ -270,18 +270,20 @@ public class ConversationViewController:
         
         // Installing bindings
         if (peer.peerType.ordinal() == ACPeerType.PRIVATE().ordinal()) {
+
             let user = Actor.getUserWithUid(peer.peerId)
-            let nameModel = user.getNameModel();
+            let nameModel = user.getNameModel()
+            let blockStatus = user.isBlockedModel().get().booleanValue()
             
             binder.bind(nameModel, closure: { (value: NSString?) -> () in
-                self.titleView.text = String(value!);
-                self.navigationView.sizeToFit();
+                self.titleView.text = String(value!)
+                self.navigationView.sizeToFit()
             })
             binder.bind(user.getAvatarModel(), closure: { (value: ACAvatar?) -> () in
                 self.avatarView.bind(user.getNameModel().get(), id: Int(user.getId()), avatar: value)
             })
             
-            binder.bind(Actor.getTypingWithUid(peer.peerId)!, valueModel2: user.getPresenceModel(), closure:{ (typing:JavaLangBoolean?, presence:ACUserPresence?) -> () in
+            binder.bind(Actor.getTypingWithUid(peer.peerId), valueModel2: user.getPresenceModel(), closure:{ (typing:JavaLangBoolean?, presence:ACUserPresence?) -> () in
                 
                 if (typing != nil && typing!.booleanValue()) {
                     self.subtitleView.text = Actor.getFormatter().formatTyping()
@@ -302,6 +304,19 @@ public class ConversationViewController:
                     }
                 }
             })
+            
+            //
+            //Unblock User
+            //
+            
+            if(blockStatus){
+                
+                let unblockActionSheet = AAUnblockActionSheet()
+                unblockActionSheet.delegate = self
+                unblockActionSheet.presentInController(self)
+            
+            }
+        
         } else if (peer.peerType.ordinal() == ACPeerType.GROUP().ordinal()) {
             let group = Actor.getGroupWithGid(peer.peerId)
             let nameModel = group.getNameModel()
@@ -313,7 +328,7 @@ public class ConversationViewController:
             binder.bind(group.getAvatarModel(), closure: { (value: ACAvatar?) -> () in
                 self.avatarView.bind(group.getNameModel().get(), id: Int(group.getId()), avatar: value)
             })
-            binder.bind(Actor.getGroupTypingWithGid(group.getId())!, valueModel2: group.getMembersModel(), valueModel3: group.getPresenceModel(), closure: { (typingValue:IOSIntArray?, members:JavaUtilHashSet?, onlineCount:JavaLangInteger?) -> () in
+            binder.bind(Actor.getGroupTypingWithGid(group.getId()), valueModel2: group.getMembersModel(), valueModel3: group.getPresenceModel(), closure: { (typingValue:IOSIntArray?, members:JavaUtilHashSet?, onlineCount:JavaLangInteger?) -> () in
                 if (!group.isMemberModel().get().booleanValue()) {
                     self.subtitleView.text = AALocalized("ChatNoGroupAccess")
                     self.subtitleView.textColor = self.appStyle.navigationSubtitleColor
@@ -469,9 +484,9 @@ public class ConversationViewController:
         
         if !text.isEmpty && textMode == false {
             
-            self.rightButton.removeTarget(self, action: "beginRecord:event:", forControlEvents: UIControlEvents.TouchDown)
-            self.rightButton.removeTarget(self, action: "mayCancelRecord:event:", forControlEvents: UIControlEvents.TouchDragInside.union(UIControlEvents.TouchDragOutside))
-            self.rightButton.removeTarget(self, action: "finishRecord:event:", forControlEvents: UIControlEvents.TouchUpInside.union(UIControlEvents.TouchCancel).union(UIControlEvents.TouchUpOutside))
+            self.rightButton.removeTarget(self, action: #selector(ConversationViewController.beginRecord(_:event:)), forControlEvents: UIControlEvents.TouchDown)
+            self.rightButton.removeTarget(self, action: #selector(ConversationViewController.mayCancelRecord(_:event:)), forControlEvents: UIControlEvents.TouchDragInside.union(UIControlEvents.TouchDragOutside))
+            self.rightButton.removeTarget(self, action: #selector(ConversationViewController.finishRecord(_:event:)), forControlEvents: UIControlEvents.TouchUpInside.union(UIControlEvents.TouchCancel).union(UIControlEvents.TouchUpOutside))
             
             self.rebindRightButton()
             
@@ -489,9 +504,9 @@ public class ConversationViewController:
             
         } else if (text.isEmpty && textMode == true) {
             
-            self.rightButton.addTarget(self, action: "beginRecord:event:", forControlEvents: UIControlEvents.TouchDown)
-            self.rightButton.addTarget(self, action: "mayCancelRecord:event:", forControlEvents: UIControlEvents.TouchDragInside.union(UIControlEvents.TouchDragOutside))
-            self.rightButton.addTarget(self, action: "finishRecord:event:", forControlEvents: UIControlEvents.TouchUpInside.union(UIControlEvents.TouchCancel).union(UIControlEvents.TouchUpOutside))
+            self.rightButton.addTarget(self, action: #selector(ConversationViewController.beginRecord(_:event:)), forControlEvents: UIControlEvents.TouchDown)
+            self.rightButton.addTarget(self, action: #selector(ConversationViewController.mayCancelRecord(_:event:)), forControlEvents: UIControlEvents.TouchDragInside.union(UIControlEvents.TouchDragOutside))
+            self.rightButton.addTarget(self, action: #selector(ConversationViewController.finishRecord(_:event:)), forControlEvents: UIControlEvents.TouchUpInside.union(UIControlEvents.TouchCancel).union(UIControlEvents.TouchUpOutside))
             
             self.stickersButton.hidden = false
             
@@ -639,6 +654,10 @@ public class ConversationViewController:
         self.presentViewController(documentPicker, animated: true, completion: nil)
     }
     
+    public func actionSheetUnblockContact() {
+        self.executePromise(Actor.unblockUser(Actor.getUserWithUid(peer.peerId).getId()))
+    }
+    
     ////////////////////////////////////////////////////////////
     // MARK: - Document picking
     ////////////////////////////////////////////////////////////
@@ -761,7 +780,7 @@ public class ConversationViewController:
         let jPhones = JavaUtilArrayList()
         let phoneNumbers: ABMultiValueRef = ABRecordCopyValue(person, kABPersonPhoneProperty).takeRetainedValue()
         let phoneCount = ABMultiValueGetCount(phoneNumbers)
-        for (var i = 0;i < phoneCount ; i++) {
+        for i in 0 ..< phoneCount {
             let phone = (ABMultiValueCopyValueAtIndex(phoneNumbers, i).takeRetainedValue() as! String).trim()
             jPhones.addWithId(phone)
         }
@@ -771,7 +790,7 @@ public class ConversationViewController:
         let jEmails = JavaUtilArrayList()
         let emails: ABMultiValueRef = ABRecordCopyValue(person, kABPersonEmailProperty).takeRetainedValue()
         let emailsCount = ABMultiValueGetCount(emails)
-        for (var i = 0; i < emailsCount; i++) {
+        for i in 0 ..< emailsCount {
             let email = (ABMultiValueCopyValueAtIndex(emails, i).takeRetainedValue() as! String).trim()
             if (email.length > 0) {
                 jEmails.addWithId(email)
@@ -800,8 +819,6 @@ public class ConversationViewController:
         
         audioRecorder.delegate = self
         audioRecorder.start()
-        
-        
     }
     
     func onAudioRecordingFinished() {
@@ -821,8 +838,8 @@ public class ConversationViewController:
 
             Actor.sendAudioWithPeer(self.peer, withName: NSString.localizedStringWithFormat("%@.ogg", NSUUID().UUIDString) as String,
                 withDuration: jint(duration*1000), withDescriptor: descriptor)
-            
         }
+        audioRecorder.cancel()
     }
     
     public func audioRecorderDidStartRecording() {
@@ -903,7 +920,7 @@ public class ConversationViewController:
         let stickerViewFrame = self.stickersButton.frame
         stickersButton.frame.origin.x = self.stickersButton.frame.origin.x + 500
         
-        UIView.animateWithDuration(0.45, delay: 0.0, usingSpringWithDamping: 0.5, initialSpringVelocity: 1.0, options: UIViewAnimationOptions.CurveLinear, animations: { () -> Void in
+        UIView.animateWithDuration(1.5, delay: 0.0, usingSpringWithDamping: 0.5, initialSpringVelocity: 1.0, options: UIViewAnimationOptions.CurveLinear, animations: { () -> Void in
             
             self.leftButton.frame = leftButtonFrame
             self.textView.frame = textViewFrame
@@ -923,7 +940,6 @@ public class ConversationViewController:
         self.stickersButton.hidden = false
         self.onAudioRecordingFinished()
         self.voiceRecorderView.recordingStoped()
-        
     }
     
     ////////////////////////////////////////////////////////////
@@ -938,7 +954,7 @@ public class ConversationViewController:
     
     func changeKeyboard() {
         if self.stickersOpen == false {
-            self.stickersView.loadStickers()
+            // self.stickersView.loadStickers()
             
             self.textInputbar.textView.inputView = self.stickersView
             self.textInputbar.textView.inputView?.opaque = false
@@ -965,7 +981,7 @@ public class ConversationViewController:
         self.view.layoutIfNeeded()
     }
     
-    func sendSticker(sticker: ACSticker) {
+    public func stickerDidSelected(keyboard: AAStickersKeyboard, sticker: ACSticker) {
         Actor.sendStickerWithPeer(self.peer, withSticker: sticker)
     }
 }

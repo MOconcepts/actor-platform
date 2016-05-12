@@ -9,18 +9,24 @@ import { LoggerTypes } from '../../constants/ActorAppConstants';
 
 class LoggerRow extends Component {
   static propTypes = {
-    tag: PropTypes.string.isRequired,
-    type: PropTypes.oneOf([
-      LoggerTypes.INFO,
-      LoggerTypes.ERROR,
-      LoggerTypes.WARNING,
-      LoggerTypes.DEBUG
-    ]).isRequired,
-    message: PropTypes.string.isRequired
+    data: PropTypes.shape({
+      tag: PropTypes.string.isRequired,
+      type: PropTypes.oneOf([
+        LoggerTypes.INFO,
+        LoggerTypes.ERROR,
+        LoggerTypes.WARNING,
+        LoggerTypes.DEBUG
+      ]).isRequired,
+      message: PropTypes.string.isRequired
+    }).isRequired
   };
 
+  shouldComponentUpdate(nextProps) {
+    return nextProps.data !== this.props.data;
+  }
+
   render() {
-    const { tag, type, message } = this.props;
+    const { tag, type, message } = this.props.data;
 
     const className = classNames('logger__container__row log-entry', {
       'log-entry--info': type === LoggerTypes.INFO,

@@ -12,6 +12,10 @@ public class AAConversationContentController: SLKTextViewController, ARDisplayLi
 
     public let peer: ACPeer
     
+    private let delayLoad = false
+    
+    private let binder = AABinder()
+    
     private var displayList: ARBindedDisplayList!
     private var isStarted: Bool = AADevice.isiPad
     private var isVisible: Bool = false
@@ -23,7 +27,10 @@ public class AAConversationContentController: SLKTextViewController, ARDisplayLi
     private var unreadMessageId: jlong = 0
     
     private var isUpdating: Bool = false
+    private var isBinded: Bool = false
     private var pendingUpdates = [ARAppleListUpdate]()
+    private var readDate: jlong = 0
+    private var receiveDate: jlong = 0
     
     // Audio notes
     public var voicePlayer : AAModernConversationAudioPlayer!
@@ -39,6 +46,10 @@ public class AAConversationContentController: SLKTextViewController, ARDisplayLi
         
         self.collectionView.backgroundColor = UIColor.clearColor()
         self.collectionView.alwaysBounceVertical = true
+  
+        for layout in AABubbles.layouters {
+            self.collectionView.registerClass(layout.cellClass(), forCellWithReuseIdentifier: layout.cellReuseId())
+        }
     }
     
     public required init!(coder decoder: NSCoder!) {
@@ -58,73 +69,92 @@ public class AAConversationContentController: SLKTextViewController, ARDisplayLi
     public override func viewWillAppear(animated: Bool) {
         super.viewWillAppear(animated)
         
-//        self.collectionView.contentInset = UIEdgeInsets(top: 32, left: 0, bottom: 200, right: 0)
-        
         isVisible = true
         
         // Hack for delaying collection view init from first animation frame
         // This dramatically speed up controller opening
         
-//        NSLog("👮🏻 viewWillAppear")
-        
-        if (isStarted) {
-//            NSLog("👮🏻 isStarted: true")
-            self.willUpdate()
-//            NSLog("👮🏻 willUpdate Called")
-            self.collectionViewLayout.beginUpdates(false, list: self.displayList.getProcessedList() as? AAPreprocessedList, unread: unreadMessageId)
-//            NSLog("👮🏻 beginUpdates called")
-            self.collectionView.reloadData()
-            prevCount = getCount()
-//            NSLog("👮🏻 count: \(prevCount)")
-            self.displayList.addAppleListener(self)
-            self.didUpdate()
-//            NSLog("👮🏻 didUpdate Called")
-            return
-        } else {
-            self.collectionView.alpha = 0
-        }
-        
-        dispatch_async(dispatch_get_main_queue(),{
-            // What if controller is already closed?
-            if (!self.isVisible) {
+        if delayLoad {
+            
+            if (isStarted) {
+                tryBind()
                 return
+            } else {
+                self.collectionView.alpha = 0
             }
             
+            dispatch_async(dispatch_get_main_queue(),{
+                // What if controller is already closed?
+                if (!self.isVisible) {
+                    return
+                }
+                
+                self.isStarted = true
+                
+                UIView.animateWithDuration(0.6, animations: { () -> Void in self.collectionView.alpha = 1 }, completion: { (comp) -> Void in })
+                
+                self.tryBind()
+            })
+        } else {
             self.isStarted = true
-            
-//            NSLog("👮🏻 isStarted: false")
             
             UIView.animateWithDuration(0.6, animations: { () -> Void in self.collectionView.alpha = 1 }, completion: { (comp) -> Void in })
             
+            tryBind()
+        }
+    }
+    
+    private func tryBind() {
+        if !self.isBinded {
+            
+            self.binder.bind(Actor.getConversationVMWithACPeer(peer).getReadDate()) { (val: JavaLangLong!) in
+                
+                let nReadDate = val!.longLongValue()
+                let oReadDate = self.readDate
+                self.readDate = nReadDate
+                
+                if self.isBinded && nReadDate != oReadDate {
+                    self.messageStatesUpdated(oReadDate, end: nReadDate)
+                }
+            }
+            self.binder.bind(Actor.getConversationVMWithACPeer(peer).getReceiveDate()) { (val: JavaLangLong!) in
+                
+                let nReceiveDate = val!.longLongValue()
+                let oReceiveDate = self.receiveDate
+                self.receiveDate = nReceiveDate
+                
+                if self.isBinded && nReceiveDate != oReceiveDate {
+                    self.messageStatesUpdated(oReceiveDate, end: nReceiveDate)
+                }
+            }
+            
+            self.isBinded = true
             self.willUpdate()
-//            NSLog("👮🏻 willUpdate Called")
             self.collectionViewLayout.beginUpdates(false, list: self.displayList.getProcessedList() as? AAPreprocessedList, unread: self.unreadMessageId)
-//            NSLog("👮🏻 beginUpdates called")
             self.collectionView.reloadData()
             self.prevCount = self.getCount()
-//            NSLog("👮🏻 count: \(self.prevCount)")
             self.displayList.addAppleListener(self)
             self.didUpdate()
-//            NSLog("👮🏻 didUpdate Called")
-        });
+        }
     }
     
     
-    public func buildCell(collectionView: UICollectionView, cellForRowAtIndexPath indexPath: NSIndexPath, item: AnyObject?) -> UICollectionViewCell {
-        let message = (item as! ACMessage)
-        let cell = collectionView.dequeueCell(AABubbles.cellClassForMessage(message), indexPath: indexPath)
+    public func buildCell(collectionView: UICollectionView, cellForRowAtIndexPath indexPath: NSIndexPath) -> UICollectionViewCell {
+        let list = getProcessedList()
+        let layout = list!.layouts[indexPath.row]
+        let cell = collectionView.dequeueReusableCellWithReuseIdentifier(layout.layouter.cellReuseId(), forIndexPath: indexPath)
         (cell as! AABubbleCell).setConfig(peer, controller: self)
         return cell
     }
     
-    public func bindCell(collectionView: UICollectionView, cellForRowAtIndexPath indexPath: NSIndexPath, item: AnyObject?, cell: UICollectionViewCell) {
+    public func bindCell(collectionView: UICollectionView, cellForRowAtIndexPath indexPath: NSIndexPath, cell: UICollectionViewCell) {
         let list = getProcessedList()
         let message = list!.items[indexPath.row]
         let setting = list!.cellSettings[indexPath.row]
         let layout = list!.layouts[indexPath.row]
         let bubbleCell = (cell as! AABubbleCell)
         let isShowNewMessages = message.rid == unreadMessageId
-        bubbleCell.performBind(message, setting: setting, isShowNewMessages: isShowNewMessages, layout: layout)
+        bubbleCell.performBind(message, receiveDate: receiveDate, readDate: readDate, setting: setting, isShowNewMessages: isShowNewMessages, layout: layout)
     }
     
     public func collectionView(collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, insetForSectionAtIndex section: Int) -> UIEdgeInsets {
@@ -167,20 +197,36 @@ public class AAConversationContentController: SLKTextViewController, ARDisplayLi
     }
     
     public override func collectionView(collectionView: UICollectionView, cellForItemAtIndexPath indexPath: NSIndexPath) -> UICollectionViewCell {
-        let item: AnyObject? = objectAtIndexPath(indexPath)
-        let cell = buildCell(collectionView, cellForRowAtIndexPath:indexPath, item:item)
-        bindCell(collectionView, cellForRowAtIndexPath: indexPath, item: item, cell: cell)
+        let cell = buildCell(collectionView, cellForRowAtIndexPath: indexPath)
+        bindCell(collectionView, cellForRowAtIndexPath: indexPath, cell: cell)
         displayList.touchWithIndex(jint(indexPath.row))
         return cell
     }
     
-    public override func viewWillDisappear(animated: Bool) {
-        super.viewWillDisappear(animated)
+    public override func collectionView(collectionView: UICollectionView, didUnhighlightItemAtIndexPath indexPath: NSIndexPath) {
+        let cell = collectionView.cellForItemAtIndexPath(indexPath) as! AABubbleCell
+        cell.updateView()
+    }
+
+    public override func collectionView(collectionView: UICollectionView, didSelectItemAtIndexPath indexPath: NSIndexPath) {
+        let cell = collectionView.cellForItemAtIndexPath(indexPath) as! AABubbleCell
+        cell.updateView()
+    }
+    
+    public override func viewDidDisappear(animated: Bool) {
+        super.viewDidDisappear(animated)
         
         isVisible = false
         
-        // Remove listener on exit
-        self.displayList.removeAppleListener(self)
+        if isBinded {
+            isBinded = false
+            
+            // Remove listener on exit
+            self.displayList.removeAppleListener(self)
+            
+            // Unbinding read/receive states
+            self.binder.unbindAll()
+        }
     }
     
     // Model updates
@@ -324,8 +370,7 @@ public class AAConversationContentController: SLKTextViewController, ARDisplayLi
             let indexPath = NSIndexPath(forRow: ind, inSection: 0)
             if visibleIndexes.contains(indexPath) {
                 let cell = self.collectionView.cellForItemAtIndexPath(indexPath)
-                let item: AnyObject? = self.objectAtIndexPath(indexPath)
-                self.bindCell(self.collectionView, cellForRowAtIndexPath: indexPath, item: item, cell: cell!)
+                self.bindCell(self.collectionView, cellForRowAtIndexPath: indexPath, cell: cell!)
             }
         }
         
@@ -351,6 +396,18 @@ public class AAConversationContentController: SLKTextViewController, ARDisplayLi
     
     private func completeUpdates(modification: ARAppleListUpdate!) {
         
+    }
+    
+    private func messageStatesUpdated(start: jlong, end: jlong) {
+        let visibleIndexes = self.collectionView.indexPathsForVisibleItems()
+        for ind in visibleIndexes {
+            if let obj = objectAtIndex(ind.row) {
+                if obj.senderId == Actor.myUid() && obj.sortDate >= start && obj.sortDate <= end {
+                    let cell = self.collectionView.cellForItemAtIndexPath(ind)
+                    self.bindCell(self.collectionView, cellForRowAtIndexPath: ind, cell: cell!)
+                }
+            }
+        }
     }
     
     public func willUpdate() {

@@ -43,7 +43,7 @@ final class SessionSpec extends BaseSessionSpec with BeforeAndAfterEach {
   it should "react to SessionHello" in sessions().hello
   it should "send SeqUpdateTooLong" in sessions().seqUpdateTooLong
   it should "cache small results" in sessions().cacheSmallResults
-  it should "not cache big requests" in sessions().notCacheBigRequests
+  it should "not cache big results" in sessions().notCacheBigResults
 
   @volatile var count = 0
 
@@ -155,9 +155,9 @@ final class SessionSpec extends BaseSessionSpec with BeforeAndAfterEach {
       }
 
       {
-        val encodedLoadDialogs = RequestCodec.encode(Request(RequestLoadDialogs(0L, 100))).require
+        val encodedLoadDialogs = RequestCodec.encode(Request(RequestLoadDialogs(0L, 100, Vector.empty))).require
         val encodedGetDifference = RequestCodec.encode(Request(RequestGetDifference(0, Array(), Vector.empty))).require
-        val encodedGetContacts = RequestCodec.encode(Request(RequestGetContacts(""))).require
+        val encodedGetContacts = RequestCodec.encode(Request(RequestGetContacts("", Vector.empty))).require
         sendMessageBox(authId, sessionId, sessionRegion.ref, Random.nextLong, ProtoRpcRequest(encodedLoadDialogs))
         sendMessageBox(authId, sessionId, sessionRegion.ref, Random.nextLong, ProtoRpcRequest(encodedGetDifference))
         sendMessageBox(authId, sessionId, sessionRegion.ref, Random.nextLong, ProtoRpcRequest(encodedGetContacts))
@@ -242,7 +242,7 @@ final class SessionSpec extends BaseSessionSpec with BeforeAndAfterEach {
       }
 
       val authSession = Await.result(db.run(AuthSessionRepo.findByAuthId(authId)), 5.seconds).get
-      implicit val clientData = AuthorizedClientData(authId, sessionId, authResult.asInstanceOf[RpcOk].response.asInstanceOf[ResponseAuth].user.id, authSession.id)
+      implicit val clientData = AuthorizedClientData(authId, sessionId, authResult.asInstanceOf[RpcOk].response.asInstanceOf[ResponseAuth].user.id, authSession.id, 42)
 
       val encodedGetSeqRequest = RequestCodec.encode(Request(RequestGetState(Vector.empty))).require
 
@@ -262,7 +262,7 @@ final class SessionSpec extends BaseSessionSpec with BeforeAndAfterEach {
       val (user, authId, authSid, _) = createUser()
       val sessionId = Random.nextLong
 
-      implicit val clientData = AuthorizedClientData(authId, sessionId, user.id, authSid)
+      implicit val clientData = AuthorizedClientData(authId, sessionId, user.id, authSid, 42)
 
       val encodedGetSeqRequest = RequestCodec.encode(Request(RequestGetState(Vector.empty))).require
 
@@ -315,7 +315,7 @@ final class SessionSpec extends BaseSessionSpec with BeforeAndAfterEach {
         case RpcOk(ResponseAuth(_, _)) ⇒
       }
 
-      implicit val clientData = AuthorizedClientData(authId, sessionId, authResult.asInstanceOf[RpcOk].response.asInstanceOf[ResponseAuth].user.id, Await.result(db.run(AuthSessionRepo.findByAuthId(authId)), 5.seconds).get.id)
+      implicit val clientData = AuthorizedClientData(authId, sessionId, authResult.asInstanceOf[RpcOk].response.asInstanceOf[ResponseAuth].user.id, Await.result(db.run(AuthSessionRepo.findByAuthId(authId)), 5.seconds).get.id, 42)
 
       val update = UpdateContactRegistered(1, isSilent = true, 1L, 5L)
       Await.result(weakUpdatesExt.broadcastUserWeakUpdate(clientData.userId, update, reduceKey = None), 1.second)
@@ -399,7 +399,7 @@ final class SessionSpec extends BaseSessionSpec with BeforeAndAfterEach {
       val messageId = Random.nextLong()
       count = 0
 
-      for (_ ← 1 to 3)
+      for (_ ← 1 to 3) {
         sendRequest(
           authId,
           sessionId,
@@ -407,14 +407,13 @@ final class SessionSpec extends BaseSessionSpec with BeforeAndAfterEach {
           messageId,
           RequestRawRequest("echo", "makeEcho", Some(ApiStringValue("...")))
         )
-
-      for (_ ← 1 to 3)
         expectRpcResult(authId, sessionId, ignoreAcks = true)
+      }
 
       count shouldBe 1
     }
 
-    def notCacheBigRequests(): Unit = {
+    def notCacheBigResults(): Unit = {
       implicit val probe = TestProbe()
 
       val authId = createAuthId()
@@ -430,7 +429,7 @@ final class SessionSpec extends BaseSessionSpec with BeforeAndAfterEach {
       val messageId = Random.nextLong()
       count = 0
 
-      for (_ ← 1 to 3)
+      for (_ ← 1 to 3) {
         sendRequest(
           authId,
           sessionId,
@@ -438,9 +437,8 @@ final class SessionSpec extends BaseSessionSpec with BeforeAndAfterEach {
           messageId,
           RequestRawRequest("echo", "makeEcho", Some(ApiStringValue(longString)))
         )
-
-      for (_ ← 1 to 3)
         expectRpcResult(authId, sessionId, ignoreAcks = true)
+      }
 
       count shouldBe 3
     }

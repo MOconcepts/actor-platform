@@ -41,7 +41,7 @@ private[activation] final class InternalCodeProvider(system: ActorSystem)
       )
     } yield ()).fold(
       failure ⇒ {
-        system.log.warning("Failed to send message via internal code provider: {}", failure)
+        system.log.debug("Failed to send message via internal code provider: {}", failure)
         Xor.right[CodeFailure, Unit](())
       },
       success ⇒ Xor.right[CodeFailure, Unit](())
@@ -65,6 +65,8 @@ private[activation] final class InternalCodeProvider(system: ActorSystem)
     } yield result
     db.run(action)
   }
+
+  override def cleanup(txHash: String): Future[Unit] = deleteAuthCode(txHash)
 
   private def sendCode(userId: Int, code: String): Future[Unit] = {
     val messageText = config.messageTemplate.replace("$$CODE$$", code)

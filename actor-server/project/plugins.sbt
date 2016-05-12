@@ -12,9 +12,13 @@ addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.7.5")
 
 addSbtPlugin("io.spray" % "sbt-revolver" % "0.7.2")
 
+<<<<<<< HEAD
 addSbtPlugin("org.flywaydb" % "flyway-sbt" % "4.0")
 
 addSbtPlugin("im.actor" %% "sbt-actor-api" % "0.7.9")
+=======
+addSbtPlugin("im.actor" %% "sbt-actor-api" % "0.7.18")
+>>>>>>> actorapp/master
 
 addSbtPlugin("com.trueaccord.scalapb" % "sbt-scalapb" % "0.5.21")
 

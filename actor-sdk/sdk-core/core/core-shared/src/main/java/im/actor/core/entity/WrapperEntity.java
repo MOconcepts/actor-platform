@@ -13,12 +13,16 @@ import im.actor.runtime.bser.BserObject;
 import im.actor.runtime.bser.BserValues;
 import im.actor.runtime.bser.BserWriter;
 
-/**
- * Created by ex3ndr on 20.05.15.
- */
+// Disabling Bounds checks for speeding up calculations
+
+/*-[
+#define J2OBJC_DISABLE_ARRAY_BOUND_CHECKS 1
+]-*/
+
 public abstract class WrapperEntity<T extends BserObject> extends BserObject {
 
     private int recordField;
+
     @SuppressWarnings("NullableProblems")
     @NotNull
     private T wrapped;
@@ -48,17 +52,13 @@ public abstract class WrapperEntity<T extends BserObject> extends BserObject {
         return wrapped;
     }
 
-    @NotNull
-    public T toWrapped() {
-        return wrapped;
-    }
-
     protected void setWrapped(@NotNull T wrapped) {
         this.wrapped = wrapped;
         applyWrapped(wrapped);
     }
 
     protected void applyWrapped(@NotNull T wrapped) {
+
     }
 
     @NotNull
@@ -75,6 +75,6 @@ public abstract class WrapperEntity<T extends BserObject> extends BserObject {
 
     @Override
     public void serialize(BserWriter writer) throws IOException {
-        writer.writeBytes(recordField, wrapped.toByteArray());
+        writer.writeObject(recordField, wrapped);
     }
 }

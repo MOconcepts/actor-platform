@@ -7,13 +7,16 @@ import akka.pattern.ask
 import akka.util.Timeout
 import cats.data.Xor
 import im.actor.config.ActorConfig
-import im.actor.server.activation.common.ActivationStateActor.{ Send, SendAck }
+import im.actor.env.ActorEnv
+import im.actor.server.activation.common.ActivationStateActor.{ ForgetSentCode, Send, SendAck }
 import im.actor.server.activation.common._
 import im.actor.server.db.DbExtension
 import im.actor.server.email.{ Content, EmailConfig, Message, SmtpEmailSender }
+import im.actor.server.model.AuthEmailTransaction
+import im.actor.server.persist.auth.AuthTransactionRepo
 import im.actor.util.misc.EmailUtils.isTestEmail
 
-import scala.concurrent.{ Future }
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 private[activation] final class SMTPProvider(system: ActorSystem) extends ActivationProvider with CommonAuthCodes {
@@ -26,9 +29,10 @@ private[activation] final class SMTPProvider(system: ActorSystem) extends Activa
 
   private val emailConfig = EmailConfig.load.getOrElse(throw new RuntimeException("Failed to load email config"))
   private val emailSender = new SmtpEmailSender(emailConfig)
-  private val emailTemplateLocation = ActorConfig.load().getString("services.activation.email.template")
+  private val emailTemplateLocation =
+    ActorEnv.getAbsolutePath(Paths.get(ActorConfig.load().getString("services.activation.email.template")))
 
-  private val emailTemplate = new String(Files.readAllBytes(Paths.get(emailTemplateLocation)))
+  private val emailTemplate = new String(Files.readAllBytes(emailTemplateLocation))
 
   private val smtpStateActor = system.actorOf(ActivationStateActor.props[String, EmailCode](
     repeatLimit = activationConfig.repeatLimit,
@@ -53,6 +57,17 @@ private[activation] final class SMTPProvider(system: ActorSystem) extends Activa
         } yield resp
       }
     case other ⇒ throw new RuntimeException(s"This provider can't handle code of type: ${other.getClass}")
+  }
+
+  override def cleanup(txHash: String): Future[Unit] = {
+    for {
+      ac ← db.run(AuthTransactionRepo.findChildren(txHash))
+      _ = ac match {
+        case Some(x: AuthEmailTransaction) ⇒ smtpStateActor ! ForgetSentCode.email(x.email)
+        case _                             ⇒
+      }
+      _ ← deleteAuthCode(txHash)
+    } yield ()
   }
 
 }

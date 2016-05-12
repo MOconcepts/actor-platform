@@ -4,11 +4,19 @@
 
 package im.actor.runtime.generic.mvvm.alg;
 
+import com.google.j2objc.annotations.AutoreleasePool;
+
 import java.util.ArrayList;
 import java.util.List;
 
 import im.actor.runtime.generic.mvvm.ChangeDescription;
 import im.actor.runtime.storage.ListEngineItem;
+
+// Disabling Bounds checks for speeding up calculations
+
+/*-[
+#define J2OBJC_DISABLE_ARRAY_BOUND_CHECKS 1
+]-*/
 
 public class Modifications {
 
@@ -16,7 +24,7 @@ public class Modifications {
         return new Modification<T>() {
             @Override
             public List<ChangeDescription<T>> modify(ArrayList<T> sourceList) {
-                return new ArrayList<ChangeDescription<T>>();
+                return new ArrayList<>();
             }
         };
     }
@@ -31,10 +39,8 @@ public class Modifications {
         return new Modification<T>() {
             @Override
             public List<ChangeDescription<T>> modify(ArrayList<T> sourceList) {
-                ArrayList<ChangeDescription<T>> res = new ArrayList<ChangeDescription<T>>();
-                for (T toAdd : items) {
-                    addOrUpdate(toAdd, sourceList, res, false);
-                }
+                ArrayList<ChangeDescription<T>> res = new ArrayList<>();
+                addOrUpdate(items, sourceList, res, false);
                 return res;
             }
         };
@@ -44,10 +50,8 @@ public class Modifications {
         return new Modification<T>() {
             @Override
             public List<ChangeDescription<T>> modify(ArrayList<T> sourceList) {
-                ArrayList<ChangeDescription<T>> res = new ArrayList<ChangeDescription<T>>();
-                for (T toAdd : items) {
-                    addOrUpdate(toAdd, sourceList, res, true);
-                }
+                ArrayList<ChangeDescription<T>> res = new ArrayList<>();
+                addOrUpdate(items, sourceList, res, true);
                 return res;
             }
         };
@@ -57,7 +61,7 @@ public class Modifications {
         return new Modification<T>() {
             @Override
             public List<ChangeDescription<T>> modify(ArrayList<T> sourceList) {
-                ArrayList<ChangeDescription<T>> res = new ArrayList<ChangeDescription<T>>();
+                ArrayList<ChangeDescription<T>> res = new ArrayList<>();
                 replace(items, sourceList, res);
                 return res;
             }
@@ -72,7 +76,7 @@ public class Modifications {
         return new Modification<T>() {
             @Override
             public List<ChangeDescription<T>> modify(ArrayList<T> sourceList) {
-                ArrayList<ChangeDescription<T>> res = new ArrayList<ChangeDescription<T>>();
+                ArrayList<ChangeDescription<T>> res = new ArrayList<>();
                 for (int i = 0; i < sourceList.size(); i++) {
                     ListEngineItem src = sourceList.get(i);
                     for (long aDstId : dstIds) {
@@ -93,7 +97,7 @@ public class Modifications {
         return new Modification<T>() {
             @Override
             public List<ChangeDescription<T>> modify(ArrayList<T> sourceList) {
-                ArrayList<ChangeDescription<T>> res = new ArrayList<ChangeDescription<T>>();
+                ArrayList<ChangeDescription<T>> res = new ArrayList<>();
                 if (sourceList.size() != 0) {
                     res.add(ChangeDescription.<T>remove(0, sourceList.size()));
                     sourceList.clear();
@@ -103,6 +107,7 @@ public class Modifications {
         };
     }
 
+    @AutoreleasePool
     private static <T extends ListEngineItem> void replace(List<T> items,
                                                            ArrayList<T> sourceList,
                                                            ArrayList<ChangeDescription<T>> changes) {
@@ -127,6 +132,17 @@ public class Modifications {
         }
     }
 
+    @AutoreleasePool
+    private static <T extends ListEngineItem> void addOrUpdate(List<T> items,
+                                                               ArrayList<T> sourceList,
+                                                               ArrayList<ChangeDescription<T>> changes,
+                                                               boolean isLoadMore) {
+        for (T toAdd : items) {
+            addOrUpdate(toAdd, sourceList, changes, isLoadMore);
+        }
+    }
+
+    @AutoreleasePool
     private static <T extends ListEngineItem> void addOrUpdate(T item,
                                                                ArrayList<T> sourceList,
                                                                ArrayList<ChangeDescription<T>> changes,
