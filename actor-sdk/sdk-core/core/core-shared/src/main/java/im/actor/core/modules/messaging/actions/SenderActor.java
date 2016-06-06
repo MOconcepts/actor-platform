@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import im.actor.core.api.ApiDocumentExAnimation;
 import im.actor.core.api.ApiDocumentExVoice;
 import im.actor.core.api.ApiFastThumb;
 import im.actor.core.api.ApiJsonMessage;
@@ -36,6 +37,7 @@ import im.actor.core.entity.Peer;
 import im.actor.core.entity.PeerType;
 import im.actor.core.entity.User;
 import im.actor.core.entity.content.AbsContent;
+import im.actor.core.entity.content.AnimationContent;
 import im.actor.core.entity.content.ContactContent;
 import im.actor.core.entity.content.DocumentContent;
 import im.actor.core.entity.content.FastThumb;
@@ -210,6 +212,60 @@ public class SenderActor extends ModuleActor {
         performSendContent(peer, rid, content);
     }
 
+    public void doSendContact(@NotNull Peer peer,
+                              @NotNull ArrayList<String> emails, @NotNull ArrayList<String> phones,
+                              @Nullable String name,
+                              @Nullable String base64photo) {
+
+        long rid = RandomUtils.nextRid();
+        long date = createPendingDate();
+        long sortDate = date + 365 * 24 * 60 * 60 * 1000L;
+
+
+        ContactContent content = ContactContent.create(name, phones, emails, base64photo);
+
+        Message message = new Message(rid, sortDate, date, myUid(), MessageState.PENDING, content);
+        context().getMessagesModule().getRouter().onOutgoingMessage(peer, message);
+
+        pendingMessages.getPendingMessages().add(new PendingMessage(peer, rid, content));
+        savePending();
+
+        performSendContent(peer, rid, content);
+    }
+
+    public void doSendLocation(@NotNull Peer peer,
+                               @NotNull Double longitude, @NotNull Double latitude,
+                               @Nullable String street, @Nullable String place) {
+
+        long rid = RandomUtils.nextRid();
+        long date = createPendingDate();
+        long sortDate = date + 365 * 24 * 60 * 60 * 1000L;
+
+
+        LocationContent content = LocationContent.create(longitude, latitude, street, place);
+
+        Message message = new Message(rid, sortDate, date, myUid(), MessageState.PENDING, content);
+        context().getMessagesModule().getRouter().onOutgoingMessage(peer, message);
+
+        pendingMessages.getPendingMessages().add(new PendingMessage(peer, rid, content));
+        savePending();
+
+        performSendContent(peer, rid, content);
+    }
+
+    public void doForwardContent(Peer peer, AbsContent content) {
+        long rid = RandomUtils.nextRid();
+        long date = createPendingDate();
+        long sortDate = date + 365 * 24 * 60 * 60 * 1000L;
+
+        Message message = new Message(rid, sortDate, date, myUid(), MessageState.PENDING, content);
+        context().getMessagesModule().getRouter().onOutgoingMessage(peer, message);
+
+        pendingMessages.getPendingMessages().add(new PendingMessage(peer, rid, content));
+        savePending();
+
+        performSendContent(peer, rid, content);
+    }
 
     // Sending documents
 
@@ -230,20 +286,6 @@ public class SenderActor extends ModuleActor {
         performUploadFile(rid, descriptor, fileName);
     }
 
-    public void doForwardContent(Peer peer, AbsContent content) {
-        long rid = RandomUtils.nextRid();
-        long date = createPendingDate();
-        long sortDate = date + 365 * 24 * 60 * 60 * 1000L;
-
-        Message message = new Message(rid, sortDate, date, myUid(), MessageState.PENDING, content);
-        context().getMessagesModule().getRouter().onOutgoingMessage(peer, message);
-
-        pendingMessages.getPendingMessages().add(new PendingMessage(peer, rid, content));
-        savePending();
-
-        performSendContent(peer, rid, content);
-    }
-
     public void doSendPhoto(Peer peer, FastThumb fastThumb, String descriptor, String fileName,
                             int fileSize, int w, int h) {
         long rid = RandomUtils.nextRid();
@@ -258,28 +300,6 @@ public class SenderActor extends ModuleActor {
         savePending();
 
         performUploadFile(rid, descriptor, fileName);
-    }
-
-    public void doSendContact(@NotNull Peer peer,
-                              @NotNull ArrayList<String> emails, @NotNull ArrayList<String> phones,
-                              @Nullable String name,
-                              @Nullable String base64photo) {
-
-
-        long rid = RandomUtils.nextRid();
-        long date = createPendingDate();
-        long sortDate = date + 365 * 24 * 60 * 60 * 1000L;
-
-
-        ContactContent content = ContactContent.create(name, phones, emails, base64photo);
-
-        Message message = new Message(rid, sortDate, date, myUid(), MessageState.PENDING, content);
-        context().getMessagesModule().getRouter().onOutgoingMessage(peer, message);
-
-        pendingMessages.getPendingMessages().add(new PendingMessage(peer, rid, content));
-        savePending();
-
-        performSendContent(peer, rid, content);
     }
 
     public void doSendAudio(Peer peer, String descriptor, String fileName,
@@ -298,27 +318,6 @@ public class SenderActor extends ModuleActor {
         performUploadFile(rid, descriptor, fileName);
     }
 
-    public void doSendLocation(@NotNull Peer peer,
-                               @NotNull Double longitude, @NotNull Double latitude,
-                               @Nullable String street, @Nullable String place) {
-
-
-        long rid = RandomUtils.nextRid();
-        long date = createPendingDate();
-        long sortDate = date + 365 * 24 * 60 * 60 * 1000L;
-
-
-        LocationContent content = LocationContent.create(longitude, latitude, street, place);
-
-        Message message = new Message(rid, sortDate, date, myUid(), MessageState.PENDING, content);
-        context().getMessagesModule().getRouter().onOutgoingMessage(peer, message);
-
-        pendingMessages.getPendingMessages().add(new PendingMessage(peer, rid, content));
-        savePending();
-
-        performSendContent(peer, rid, content);
-    }
-
     public void doSendVideo(Peer peer, String fileName, int w, int h, int duration,
                             FastThumb fastThumb, String descriptor, int fileSize) {
         long rid = RandomUtils.nextRid();
@@ -331,6 +330,23 @@ public class SenderActor extends ModuleActor {
         context().getMessagesModule().getRouter().onOutgoingMessage(peer, message);
 
         pendingMessages.getPendingMessages().add(new PendingMessage(peer, rid, videoContent));
+        savePending();
+
+        performUploadFile(rid, descriptor, fileName);
+    }
+
+    public void doSendAnimation(Peer peer, String fileName, int w, int h,
+                                FastThumb fastThumb, String descriptor, int fileSize) {
+        long rid = RandomUtils.nextRid();
+        long date = createPendingDate();
+        long sortDate = date + 365 * 24 * 60 * 60 * 1000L;
+        AnimationContent animationContent = AnimationContent.createLocalAnimation(descriptor,
+                fileName, fileSize, w, h, fastThumb);
+
+        Message message = new Message(rid, sortDate, date, myUid(), MessageState.PENDING, animationContent);
+        context().getMessagesModule().getRouter().onOutgoingMessage(peer, message);
+
+        pendingMessages.getPendingMessages().add(new PendingMessage(peer, rid, animationContent));
         savePending();
 
         performUploadFile(rid, descriptor, fileName);
@@ -362,6 +378,10 @@ public class SenderActor extends ModuleActor {
         } else if (msg.getContent() instanceof VoiceContent) {
             VoiceContent baseVoiceContent = (VoiceContent) msg.getContent();
             nContent = VoiceContent.createRemoteAudio(fileReference, baseVoiceContent.getDuration());
+        } else if (msg.getContent() instanceof AnimationContent) {
+            AnimationContent baseAnimcationContent = (AnimationContent) msg.getContent();
+            nContent = AnimationContent.createRemoteAnimation(fileReference, baseAnimcationContent.getW(),
+                    baseAnimcationContent.getH(), baseAnimcationContent.getFastThumb());
         } else if (msg.getContent() instanceof DocumentContent) {
             DocumentContent baseDocContent = (DocumentContent) msg.getContent();
             nContent = DocumentContent.createRemoteDocument(fileReference, baseDocContent.getFastThumb());
@@ -406,6 +426,9 @@ public class SenderActor extends ModuleActor {
             } else if (content instanceof VideoContent) {
                 VideoContent videoContent = (VideoContent) content;
                 documentEx = new ApiDocumentExVideo(videoContent.getW(), videoContent.getH(), videoContent.getDuration());
+            } else if (content instanceof AnimationContent) {
+                AnimationContent animationContent = (AnimationContent) content;
+                documentEx = new ApiDocumentExAnimation(animationContent.getW(), animationContent.getH());
             } else if (content instanceof VoiceContent) {
                 VoiceContent voiceContent = (VoiceContent) content;
                 documentEx = new ApiDocumentExVoice(voiceContent.getDuration());
@@ -554,6 +577,11 @@ public class SenderActor extends ModuleActor {
         } else if (message instanceof ForwardContent) {
             ForwardContent forwardContent = (ForwardContent) message;
             doForwardContent(forwardContent.getPeer(), forwardContent.getContent());
+        } else if (message instanceof SendAnimation) {
+            SendAnimation animation = (SendAnimation) message;
+            doSendAnimation(animation.getPeer(), animation.getFileName(),
+                    animation.getW(), animation.getH(), animation.getFastThumb(), animation.getDescriptor(),
+                    animation.getFileSize());
         } else {
             super.onReceive(message);
         }
@@ -631,6 +659,57 @@ public class SenderActor extends ModuleActor {
 
         public SendPhoto(Peer peer, FastThumb fastThumb, String descriptor, String fileName,
                          int fileSize, int w, int h) {
+            this.peer = peer;
+            this.fastThumb = fastThumb;
+            this.descriptor = descriptor;
+            this.fileName = fileName;
+            this.fileSize = fileSize;
+            this.w = w;
+            this.h = h;
+        }
+
+        public Peer getPeer() {
+            return peer;
+        }
+
+        public FastThumb getFastThumb() {
+            return fastThumb;
+        }
+
+        public String getDescriptor() {
+            return descriptor;
+        }
+
+        public String getFileName() {
+            return fileName;
+        }
+
+        public int getFileSize() {
+            return fileSize;
+        }
+
+        public int getW() {
+            return w;
+        }
+
+        public int getH() {
+            return h;
+        }
+    }
+
+
+    public static class SendAnimation {
+
+        private Peer peer;
+        private FastThumb fastThumb;
+        private String descriptor;
+        private String fileName;
+        private int fileSize;
+        private int w;
+        private int h;
+
+        public SendAnimation(Peer peer, FastThumb fastThumb, String descriptor, String fileName,
+                             int fileSize, int w, int h) {
             this.peer = peer;
             this.fastThumb = fastThumb;
             this.descriptor = descriptor;

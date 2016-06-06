@@ -77,7 +77,7 @@ public class InviteContactHolder extends ViewHolder<PhoneBookContact> {
         }
 
         avatar = new AvatarView(context);
-        avatar.init(52, 24);
+        avatar.init(52, 22);
         {
             FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(Screen.dp(52), Screen.dp(52));
             layoutParams.leftMargin = Screen.dp(6);
@@ -170,14 +170,10 @@ public class InviteContactHolder extends ViewHolder<PhoneBookContact> {
             title.setText(data.getName());
         }
 
-        if (selected) {
-            if ((type == TYPE_EMAIL && data.getEmails().size() > 0) || data.getPhones().size() == 0) {
-                subtitle.setText(data.getEmails().get(0).getEmail());
-            } else {
-                subtitle.setText(Long.toString(data.getPhones().get(0).getNumber()));
-            }
+        if ((type == TYPE_EMAIL && data.getEmails().size() > 0) || data.getPhones().size() == 0) {
+            subtitle.setText(data.getEmails().get(0).getEmail());
         } else {
-            subtitle.setText("");
+            subtitle.setText(Long.toString(data.getPhones().get(0).getNumber()));
         }
 
         isSelected.setChecked(selected);

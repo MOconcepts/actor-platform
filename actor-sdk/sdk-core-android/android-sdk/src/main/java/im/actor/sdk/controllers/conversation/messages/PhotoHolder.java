@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.drawable.Animatable;
 import android.net.Uri;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -13,11 +14,14 @@ import android.widget.TextView;
 import com.droidkit.progress.CircularView;
 import com.facebook.drawee.backends.pipeline.Fresco;
 import com.facebook.drawee.backends.pipeline.PipelineDraweeController;
+import com.facebook.drawee.controller.BaseControllerListener;
+import com.facebook.drawee.controller.ControllerListener;
 import com.facebook.drawee.generic.GenericDraweeHierarchy;
 import com.facebook.drawee.generic.GenericDraweeHierarchyBuilder;
 import com.facebook.drawee.generic.RoundingParams;
 import com.facebook.drawee.view.SimpleDraweeView;
 import com.facebook.imagepipeline.common.ResizeOptions;
+import com.facebook.imagepipeline.image.ImageInfo;
 import com.facebook.imagepipeline.request.ImageRequest;
 import com.facebook.imagepipeline.request.ImageRequestBuilder;
 
@@ -25,6 +29,7 @@ import java.io.File;
 
 import im.actor.core.entity.FileReference;
 import im.actor.core.entity.Message;
+import im.actor.core.entity.content.AnimationContent;
 import im.actor.core.entity.content.DocumentContent;
 import im.actor.core.entity.content.FileLocalSource;
 import im.actor.core.entity.content.FileRemoteSource;
@@ -86,11 +91,15 @@ public class PhotoHolder extends MessageHolder {
     protected FileVM downloadFileVM;
     protected UploadFileVM uploadFileVM;
     protected boolean isPhoto;
+    protected boolean isAnimation;
+
 
     int lastUpdatedIndex = 0;
     long currenrRid = 0;
     private boolean updated = false;
     private boolean playRequested = false;
+    private final ControllerListener animationController;
+    private Animatable anim;
 
     public PhotoHolder(MessagesAdapter fragment, View itemView) {
         super(fragment, itemView, false);
@@ -117,6 +126,17 @@ public class PhotoHolder extends MessageHolder {
                         .setRoundingMethod(RoundingParams.RoundingMethod.BITMAP_ONLY))
                 .build();
         previewView.setHierarchy(hierarchy);
+
+        animationController = new BaseControllerListener<ImageInfo>() {
+            @Override
+            public void onFinalImageSet(
+                    String id,
+                    ImageInfo imageInfo,
+                    Animatable anim) {
+                PhotoHolder.this.anim = anim;
+                playAnimation();
+            }
+        };
 
         fastThumbLoader = new FastThumbLoader(previewView);
         time = (TextView) itemView.findViewById(R.id.time);
@@ -185,11 +205,20 @@ public class PhotoHolder extends MessageHolder {
                 w = ((PhotoContent) message.getContent()).getW();
                 h = ((PhotoContent) message.getContent()).getH();
                 isPhoto = true;
+                isAnimation = false;
                 duration.setVisibility(View.GONE);
+            } else if (message.getContent() instanceof AnimationContent) {
+                w = ((AnimationContent) message.getContent()).getW();
+                h = ((AnimationContent) message.getContent()).getH();
+                isPhoto = true;
+                isAnimation = true;
+                duration.setVisibility(View.VISIBLE);
+                duration.setText("");
             } else if (message.getContent() instanceof VideoContent) {
                 w = ((VideoContent) message.getContent()).getW();
                 h = ((VideoContent) message.getContent()).getH();
                 isPhoto = false;
+                isAnimation = false;
                 duration.setVisibility(View.VISIBLE);
                 duration.setText(messenger().getFormatter().formatDuration(((VideoContent) message.getContent()).getDuration()));
             } else {
@@ -247,6 +276,7 @@ public class PhotoHolder extends MessageHolder {
 
 
         if (needRebind) {
+            anim = null;
             if (!updated) {
                 playRequested = false;
             }
@@ -266,8 +296,9 @@ public class PhotoHolder extends MessageHolder {
             } else if (fileMessage.getSource() instanceof FileLocalSource) {
                 uploadFileVM = messenger().bindUpload(message.getRid(), new UploadVMCallback());
                 if (isPhoto) {
-                    previewView.setImageURI(Uri.fromFile(
-                            new File(((FileLocalSource) fileMessage.getSource()).getFileDescriptor())));
+                    Uri uri = Uri.fromFile(
+                            new File(((FileLocalSource) fileMessage.getSource()).getFileDescriptor()));
+                    bindImage(uri);
                 } else {
                     if (!updated) {
                         previewView.setImageURI(null);
@@ -312,8 +343,10 @@ public class PhotoHolder extends MessageHolder {
                         public void run() {
                             if (document instanceof PhotoContent) {
                                 Intents.openMedia(getAdapter().getMessagesFragment().getActivity(), previewView, reference.getDescriptor(), currentMessage.getSenderId());
-                            } else {
+                            } else if (document instanceof VideoContent) {
                                 playVideo(document, reference);
+                            } else if (document instanceof AnimationContent) {
+                                toggleAnimation();
                             }
                         }
                     });
@@ -339,9 +372,35 @@ public class PhotoHolder extends MessageHolder {
         }
     }
 
+    private void playAnimation() {
+        playAnimation(messenger().isAnimationAutoPlayEnabled());
+    }
+
+    private void playAnimation(boolean play) {
+        if (anim != null) {
+            if (play) {
+                anim.start();
+            } else {
+                anim.stop();
+            }
+        }
+    }
+
+    private void toggleAnimation() {
+        if (anim != null) {
+            if (anim.isRunning()) {
+                anim.stop();
+            } else {
+                anim.start();
+            }
+        }
+    }
+
     public void playVideo(DocumentContent document, FileSystemReference reference) {
         Activity activity = getAdapter().getMessagesFragment().getActivity();
-        activity.startActivity(Intents.openDoc(document.getName(), reference.getDescriptor()));
+        if (activity != null) {
+            activity.startActivity(Intents.openDoc(document.getName(), reference.getDescriptor()));
+        }
     }
 
     @Override
@@ -463,15 +522,11 @@ public class PhotoHolder extends MessageHolder {
                         previewView.getHierarchy().setPlaceholderImage(new FastBitmapDrawable(drawingCache));
                     }
                 }
-                ImageRequest request = ImageRequestBuilder.newBuilderWithSource(Uri.fromFile(new File(reference.getDescriptor())))
-                        .setResizeOptions(new ResizeOptions(previewView.getLayoutParams().width,
-                                previewView.getLayoutParams().height))
-                        .build();
-                PipelineDraweeController controller = (PipelineDraweeController) Fresco.newDraweeControllerBuilder()
-                        .setOldController(previewView.getController())
-                        .setImageRequest(request)
-                        .build();
-                previewView.setController(controller);
+                Uri uri = Uri.fromFile(new File(reference.getDescriptor()));
+                bindImage(uri);
+                if (isAnimation && !updated) {
+                    checkFastThumb();
+                }
                 // previewView.setImageURI(Uri.fromFile(new File(reference.getDescriptor())));
             } else {
                 if (!updated) {
@@ -490,5 +545,18 @@ public class PhotoHolder extends MessageHolder {
             goneView(progressView);
             goneView(progressValue);
         }
+    }
+
+    public void bindImage(Uri uri) {
+        ImageRequest request = ImageRequestBuilder.newBuilderWithSource(uri)
+                .setResizeOptions(new ResizeOptions(previewView.getLayoutParams().width,
+                        previewView.getLayoutParams().height))
+                .build();
+        PipelineDraweeController controller = (PipelineDraweeController) Fresco.newDraweeControllerBuilder()
+                .setOldController(previewView.getController())
+                .setImageRequest(request)
+                .setControllerListener(animationController)
+                .build();
+        previewView.setController(controller);
     }
 }

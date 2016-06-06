@@ -16,7 +16,6 @@ import im.actor.core.api.ApiRawValue;
 import im.actor.core.api.ApiSex;
 import im.actor.core.api.ApiAuthSession;
 import im.actor.core.api.rpc.ResponseRawRequest;
-import im.actor.core.api.rpc.ResponseSeqDate;
 import im.actor.core.entity.AuthCodeRes;
 import im.actor.core.entity.AuthRes;
 import im.actor.core.entity.AuthStartRes;
@@ -27,8 +26,6 @@ import im.actor.core.entity.MessageSearchEntity;
 import im.actor.core.entity.Peer;
 import im.actor.core.entity.PeerSearchEntity;
 import im.actor.core.entity.PeerSearchType;
-import im.actor.core.entity.PhoneBookContact;
-import im.actor.core.entity.PublicGroup;
 import im.actor.core.entity.Sex;
 import im.actor.core.entity.User;
 import im.actor.core.entity.WebActionDescriptor;
@@ -50,11 +47,9 @@ import im.actor.core.events.PeerInfoOpened;
 import im.actor.core.events.UserVisible;
 import im.actor.core.network.NetworkState;
 import im.actor.core.util.ActorTrace;
-import im.actor.core.util.Timing;
 import im.actor.core.viewmodel.AppStateVM;
 import im.actor.core.viewmodel.CallVM;
 import im.actor.core.viewmodel.Command;
-import im.actor.core.viewmodel.CommandCallback;
 import im.actor.core.viewmodel.ConversationVM;
 import im.actor.core.viewmodel.DialogGroupsVM;
 import im.actor.core.viewmodel.FileCallback;
@@ -70,16 +65,12 @@ import im.actor.core.viewmodel.UploadFileCallback;
 import im.actor.core.viewmodel.UploadFileVM;
 import im.actor.core.viewmodel.UploadFileVMCallback;
 import im.actor.core.viewmodel.UserVM;
-import im.actor.runtime.Runtime;
 import im.actor.runtime.actors.ActorSystem;
 import im.actor.runtime.actors.messages.Void;
-import im.actor.runtime.function.Consumer;
 import im.actor.runtime.mvvm.MVVMCollection;
 import im.actor.runtime.mvvm.ValueModel;
 import im.actor.runtime.promise.Promise;
 import im.actor.runtime.storage.PreferencesStorage;
-import im.actor.runtime.threading.SimpleDispatcher;
-import im.actor.runtime.threading.ThreadDispatcher;
 
 /**
  * Entry point to Actor Messaging
@@ -850,6 +841,23 @@ public class Messenger {
     }
 
     /**
+     * Send Animation message
+     *
+     * @param peer       destination peer
+     * @param fileName   File name (without path)
+     * @param w          photo width
+     * @param h          photo height
+     * @param fastThumb  Fast thumb of photo
+     * @param descriptor File Descriptor
+     */
+    @ObjectiveCName("sendAnimationWithPeer:withName:withW:withH:withThumb:withDescriptor:")
+    public void sendAnimation(@NotNull Peer peer, @NotNull String fileName,
+                              int w, int h, @Nullable FastThumb fastThumb,
+                              @NotNull String descriptor) {
+        modules.getMessagesModule().sendAnimation(peer, fileName, w, h, fastThumb, descriptor);
+    }
+
+    /**
      * Send Video message
      *
      * @param peer       destination peer
@@ -1222,6 +1230,20 @@ public class Messenger {
             modules.getCallsModule().unmuteCall(callId);
         } else {
             modules.getCallsModule().muteCall(callId);
+        }
+    }
+
+    /**
+     * Toggle video of call
+     *
+     * @param callId Call Id
+     */
+    @ObjectiveCName("toggleVideoEnabledWithCallId:")
+    public void toggleVideoEnabled(long callId) {
+        if (modules.getCallsModule().getCall(callId).getIsVideoEnabled().get()) {
+            modules.getCallsModule().disableVideo(callId);
+        } else {
+            modules.getCallsModule().enableVideo(callId);
         }
     }
 
@@ -2038,6 +2060,28 @@ public class Messenger {
     }
 
     /**
+     * Notifications sound enabled for peer
+     *
+     * @param peer destination peer
+     * @return notification sound custom uri or null for default sound
+     */
+    @ObjectiveCName("getNotificationsSoundWithPeer:")
+    public String getNotificationsSound(Peer peer) {
+        return modules.getSettingsModule().getNotificationPeerSound(peer);
+    }
+
+    /**
+     * Change notifications sound for peer
+     *
+     * @param peer destination peer
+     * @param val  notification sound custom uri or null for default sound
+     */
+    @ObjectiveCName("changeNotificationsSoundPeer:withValue:")
+    public void changeNotificationsSound(Peer peer, String val) {
+        modules.getSettingsModule().changeNotificationPeerSound(peer, val);
+    }
+
+    /**
      * Is in-app notifications enabled
      *
      * @return is notifications enabled
@@ -2167,6 +2211,27 @@ public class Messenger {
     public boolean isRenameHintShown() {
         return modules.getSettingsModule().isRenameHintShown();
     }
+
+    /**
+     * Is animation content auto play enabled
+     *
+     * @return is auto play enabled
+     */
+    @ObjectiveCName("isAnimationAutoPlayEnabled")
+    public boolean isAnimationAutoPlayEnabled() {
+        return modules.getSettingsModule().isAnimationAutoPlayEnabled();
+    }
+
+    /**
+     * Change animation auto play enabled
+     *
+     * @param val is auto play enabled
+     */
+    @ObjectiveCName("changeAnimationAutoPlayEnabled:")
+    public void changeAnimationAutoPlayEnabled(boolean val) {
+        modules.getSettingsModule().setAnimationAutoPlayEnabled(val);
+    }
+
 
     //////////////////////////////////////
     //            Security

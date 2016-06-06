@@ -9,15 +9,10 @@
   display: flex;
   flex: 0 0 auto;
   width: $sidebar-width;
-  height: 100%;
   color: $sidebar-text-color;
   flex-direction: row;
   background-color: $dusky-blue;
   flex-direction: column;
-}
-
-.sidebar__history {
-  margin-top: 16px;
 }
 
 .sidebar__avatar {

@@ -35,20 +35,11 @@ import im.actor.core.entity.content.TextContent;
 import im.actor.core.modules.AbsModule;
 import im.actor.core.modules.ModuleActor;
 import im.actor.core.modules.ModuleContext;
+import im.actor.core.modules.api.ApiSupportConfiguration;
 import im.actor.core.modules.messaging.actions.CursorReaderActor;
 import im.actor.core.modules.messaging.actions.CursorReceiverActor;
 import im.actor.core.modules.messaging.actions.SenderActor;
 import im.actor.core.modules.messaging.dialogs.DialogsInt;
-import im.actor.core.modules.messaging.dialogs.entity.ChatClear;
-import im.actor.core.modules.messaging.dialogs.entity.ChatDelete;
-import im.actor.core.modules.messaging.dialogs.entity.CounterChanged;
-import im.actor.core.modules.messaging.dialogs.entity.GroupChanged;
-import im.actor.core.modules.messaging.dialogs.entity.InMessage;
-import im.actor.core.modules.messaging.dialogs.entity.MessageDeleted;
-import im.actor.core.modules.messaging.dialogs.entity.PeerReadChanged;
-import im.actor.core.modules.messaging.dialogs.entity.PeerReceiveChanged;
-import im.actor.core.modules.messaging.dialogs.entity.UserChanged;
-import im.actor.core.modules.messaging.dialogs.entity.HistoryLoaded;
 import im.actor.core.modules.messaging.history.entity.DialogHistory;
 import im.actor.core.modules.messaging.router.entity.ActiveDialogGroup;
 import im.actor.core.modules.messaging.router.entity.ActiveDialogStorage;
@@ -123,8 +114,9 @@ public class RouterActor extends ModuleActor {
             }
         }
         if (!activeDialogStorage.isLoaded()) {
-            api(new RequestLoadGroupedDialogs())
+            api(new RequestLoadGroupedDialogs(ApiSupportConfiguration.OPTIMIZATIONS))
                     .chain(r -> updates().applyRelatedData(r.getUsers(), r.getGroups()))
+                    .chain(r -> updates().loadRequiredPeers(r.getUserPeers(), r.getGroupPeers()))
                     .then(r -> {
                         boolean showArchived = false;
                         boolean showInvite = false;
@@ -424,6 +416,9 @@ public class RouterActor extends ModuleActor {
             conversationStates.addOrUpdateItem(state);
         }
 
+        // Reading messages if needed
+        markAsReadIfNeeded(peer);
+
         return Promise.success(null);
     }
 
@@ -437,7 +432,7 @@ public class RouterActor extends ModuleActor {
         Message message = conversation(peer).getValue(rid);
 
         if (message != null) {
-            conversation(peer).addOrUpdateItem(message.changeContent(content));
+            conversation(peer).addOrUpdateItem(message.changeContent(content.incrementUpdatedCounter(message.getContent().getUpdatedCounter())));
             return getDialogsRouter().onMessageContentChanged(peer, rid, content);
         } else {
             return Promise.success(null);
@@ -526,6 +521,11 @@ public class RouterActor extends ModuleActor {
     private Promise<Void> onMessageReadByMe(Peer peer, long date, int counter) {
 
         ConversationState state = conversationStates.getValue(peer.getUnuqueId());
+
+        if (state.getInReadDate() >= date) {
+            return Promise.success(null);
+        }
+
         state = state
                 .changeCounter(counter)
                 .changeInReadDate(date);
@@ -615,7 +615,7 @@ public class RouterActor extends ModuleActor {
     private void markAsReadIfNeeded(Peer peer) {
         if (isConversationVisible(peer)) {
             ConversationState state = conversationStates.getValue(peer.getUnuqueId());
-            if (state.getUnreadCount() != 0 || state.getInReadDate() < state.getInMaxMessageDate()) {
+            if (state.getInReadDate() < state.getInMaxMessageDate()) {
                 state = state
                         .changeCounter(0)
                         .changeInReadDate(state.getInMaxMessageDate());

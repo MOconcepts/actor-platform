@@ -3,8 +3,7 @@
  */
 
 import React, { Component, PropTypes } from 'react';
-import classnames from 'classnames';
-
+import EventListener from 'fbjs/lib/EventListener';
 import { KeyCodes } from '../../constants/ActorAppConstants';
 
 class SearchInput extends Component {
@@ -13,100 +12,103 @@ class SearchInput extends Component {
   };
 
   static propTypes = {
-    className: PropTypes.string,
     value: PropTypes.string.isRequired,
-    isOpen: PropTypes.bool.isRequired,
     isFocused: PropTypes.bool.isRequired,
-    onChange: PropTypes.func.isRequired,
-    onToggleOpen: PropTypes.func.isRequired,
-    onToggleFocus: PropTypes.func.isRequired
+    onBlur: PropTypes.func.isRequired,
+    onFocus: PropTypes.func.isRequired,
+    onClear: PropTypes.func.isRequired,
+    onChange: PropTypes.func.isRequired
   };
 
   constructor(props) {
     super(props);
 
-    this.onChange = this.onChange.bind(this);
-    this.onFocus = this.onFocus.bind(this);
-    this.onBlur = this.onBlur.bind(this);
-    this.onKeyDown = this.onKeyDown.bind(this);
-    this.onClear = this.onClear.bind(this);
+    this.handleFocus = this.handleFocus.bind(this);
+    this.handleChange = this.handleChange.bind(this);
+    this.handleKeyDown = this.handleKeyDown.bind(this);
+    this.handleGlobalClick = this.handleGlobalClick.bind(this);
   }
 
   componentDidMount() {
-    document.addEventListener('keydown', this.onKeyDown, false);
+    this.listeners = [
+      EventListener.listen(document, 'keydown', this.handleKeyDown),
+      EventListener.listen(document, 'click', this.handleGlobalClick)
+    ];
   }
 
   componentWillUnmount() {
-    document.removeEventListener('keydown', this.onKeyDown, false);
+    this.listeners.forEach((listener) => listener.remove());
+    this.listeners = null;
   }
 
-  onChange(event) {
+  handleGlobalClick(event) {
+   if (this.props.isFocused && event.target !== this.refs.search) {
+     this.props.onBlur();
+   }
+ }
+
+  handleFocus(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    this.props.onFocus();
+  }
+
+  handleChange(event) {
     this.props.onChange(event.target.value);
   }
 
-  onFocus() {
-    if (this.props.value.length) {
-      this.props.onToggleOpen(true);
-    }
-
-    this.props.onToggleFocus(true);
-  }
-
-  onBlur() {
-    if (!this.props.value.length) {
-      this.props.onToggleOpen(false);
-    }
-
-    this.props.onToggleFocus(false);
-  }
-
-  onClear() {
-    this.props.onChange('');
-    this.props.onToggleOpen(false);
-    this.props.onToggleFocus(false);
-  }
-
-  onKeyDown(event) {
-    if (this.props.isOpen && event.keyCode === KeyCodes.ESC) {
+  handleKeyDown(event) {
+    if (event.keyCode === KeyCodes.K && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
-      this.onClear();
+      this.focus();
+    }
+
+    if (event.keyCode === KeyCodes.ESC && this.isFocused()) {
+      event.preventDefault();
+      this.props.onClear();
     }
   }
 
-  renderClose() {
-    if (!this.props.value.length) {
+  renderClear() {
+    if (!this.props.value) {
       return null;
     }
 
     return (
-      <i className="close-icon material-icons" onClick={this.onClear}>close</i>
+      <i className="close-icon material-icons" onClick={this.props.onClear}>close</i>
     );
   }
 
   render() {
-    const { className, value, isFocused } = this.props;
+    const { value } = this.props;
     const { intl } = this.context;
 
-    const searchClassName = classnames('toolbar__search', className, {
-      'toolbar__search--focused': isFocused || value.length
-    });
-
     return (
-      <div className={searchClassName}>
+      <div className="row toolbar__search__input col-xs">
         <input
-          className="input input--search"
+          className="input input--search col-xs"
           type="search"
+          ref="search"
           tabIndex="1"
           value={value}
           placeholder={intl.messages['search.placeholder']}
-          onFocus={this.onFocus}
-          onBlur={this.onBlur}
-          onChange={this.onChange}
+          onFocus={this.props.onFocus}
+          onChange={this.handleChange}
         />
-        <i className="search-icon material-icons">search</i>
-        {this.renderClose()}
+        {this.renderClear()}
       </div>
     );
+  }
+
+  focus() {
+    if (this.refs.search) {
+      this.refs.search.focus();
+    }
+  }
+
+  isFocused() {
+    return document.activeElement === this.refs.search;
   }
 }
 
